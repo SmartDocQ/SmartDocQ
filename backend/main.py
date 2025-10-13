@@ -53,8 +53,20 @@ if GEMINI_API_KEY:
 TEXT_MODEL = os.environ.get("TEXT_MODEL", "models/gemini-2.5-flash")  # stable free model
 EMBED_MODEL = os.environ.get("EMBED_MODEL", "models/text-embedding-004")
 
-# Persistent Chroma DB
-chroma_client = chromadb.PersistentClient(path="./chroma_db")
+# Persistent Chroma DB (configurable path)
+# Use CHROMA_DB_PATH to place the vector store on a persistent disk in production (e.g., /var/data/chroma_db on Render)
+CHROMA_DB_PATH = os.environ.get("CHROMA_DB_PATH", os.path.join(os.getcwd(), "chroma_db"))
+try:
+    os.makedirs(CHROMA_DB_PATH, exist_ok=True)
+except Exception as _e:
+    # If directory creation fails, fallback to current dir to avoid startup crash
+    CHROMA_DB_PATH = os.path.join(os.getcwd(), "chroma_db")
+    try:
+        os.makedirs(CHROMA_DB_PATH, exist_ok=True)
+    except Exception:
+        pass
+
+chroma_client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
 collection = chroma_client.get_or_create_collection("documents")
 
 def contains_link(text):
@@ -803,10 +815,6 @@ def set_consent():
     return jsonify({"message": "Consent recorded.", "requireConfirmation": False})
 
     # Register blueprints and initialize modules
-    
-
-# ====== BLUEPRINT REGISTRATION ======
-# Initialize and register blueprints regardless of run context
 try:
     init_quiz(
         collection,

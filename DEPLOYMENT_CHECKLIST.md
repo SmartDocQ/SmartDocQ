@@ -31,7 +31,7 @@ This checklist lets you deploy without running anything locally.
 
 ## 3) Flask service (backend/) on your host
 - Build: `pip install -r requirements.txt`
-- Start command (Gunicorn): `gunicorn main:app --workers 2 --threads 4 --timeout 120`
+- Start command (Gunicorn): `gunicorn main:app --workers 2 --threads 4 --timeout 120 --bind 0.0.0.0:$PORT`
 - Environment Variables:
   - PORT = 5001 (or platform default)
   - FRONTEND_ORIGINS = https://<your-vercel-domain>, *.vercel.app
@@ -40,6 +40,7 @@ This checklist lets you deploy without running anything locally.
   - GEMINI_API_KEY = <your-google-generative-ai-key>
   - TEXT_MODEL = models/gemini-2.5-flash (optional)
   - EMBED_MODEL = models/text-embedding-004 (optional)
+  - CHROMA_DB_PATH = /var/data/chroma_db (recommended when using a persistent disk)
 - After deploy, check: GET https://<your-flask-domain>/healthz → { "status": "ok" }.
 
 ## 4) Order of operations
@@ -56,5 +57,10 @@ This checklist lets you deploy without running anything locally.
 - CORS errors: ensure FRONTEND_ORIGINS includes your exact Vercel URL or wildcard .vercel.app.
 - 401/403 from Flask doc download: SERVICE_TOKEN must match on Node and Flask.
 - Conversion failures: confirm FLASK_CONVERT_URL set and docx2pdf is available; otherwise Word files are stored as-is.
+
+### Render-specific (persistent ChromaDB)
+- Add a Persistent Disk to the Flask service (e.g., size 1–5 GB) and mount it at `/var/data`.
+- Set env var `CHROMA_DB_PATH=/var/data/chroma_db`.
+- Redeploy. Your embeddings will persist across restarts.
 
 Keep servers/.env.example and backend/.env.example as references for all variables.
