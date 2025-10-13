@@ -1,0 +1,233 @@
+.auth-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+  position: relative;
+}
+
+/* Form Toggle Styling */
+.form-toggle {
+  position: relative;
+  display: flex;
+  background: #f3f4f6;
+  border-radius: 12px;
+  padding: 4px;
+  gap: 4px;
+}
+
+.toggle-btn {
+  flex: 1;
+  padding: 12px 20px;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  font-weight: 500;
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  position: relative;
+  z-index: 2;
+}
+
+.toggle-btn.active {
+  color: #fff;
+}
+
+.toggle-slider {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: calc(50% - 2px);
+  height: calc(100% - 8px);
+  background: linear-gradient(135deg, #a855f7, #7c3aed);
+  border-radius: 8px;
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 1;
+}
+
+.toggle-slider.signup {
+  transform: translateX(100%);
+}
+
+/* Form Wrapper Styling */
+.form-wrapper {
+  opacity: 0;
+  transform: translateX(20px);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  pointer-events: none;
+}
+
+.form-wrapper.active {
+  opacity: 1;
+  transform: translateX(0);
+  position: relative;
+  pointer-events: all;
+}
+
+.form-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: #1f2937;
+  text-align: center;
+}
+
+.form-subtitle {
+  margin:0;
+  font-size: 14px;
+  color: #494c52;
+  text-align: center;
+}
+
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.input-group label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.input-group input {
+  padding: 12px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  background: #fff;
+}
+
+.input-group input:focus {
+  outline: none;
+  border-color: #a855f7;
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.1);
+}
+
+.input-group input.input-error {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+.error-message {
+  font-size: 12px;
+  color: #ef4444;
+  margin-top: 2px;
+  animation: errorShake 0.3s ease-in-out;
+}
+
+@keyframes errorShake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+.form-options {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+}
+
+.checkbox-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: #374151;
+}
+
+.checkbox-container input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #a855f7;
+  cursor: pointer;
+}
+
+.forgot-link {
+  color: #a855f7;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s ease;
+}
+
+.forgot-link:hover {
+  color: #7c3aed;
+  text-decoration: underline;
+}
+
+.submit-btn {
+  background: linear-gradient(135deg, #a855f7, #7c3aed);
+  color: white;
+  padding: 12px 24px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+.submit-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s ease;
+}
+
+.submit-btn:hover::before {
+  left: 100%;
+}
+
+.submit-btn:hover {
+  background: linear-gradient(135deg, #9333ea, #6d28d9);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(168, 85, 247, 0.3);
+}
+
+.submit-btn:active {
+  transform: translateY(0);
+}
+
+/* Responsive adjustments for smaller screens */
+@media (max-width: 480px) {
+  .auth-container {
+    gap: 20px;
+  }
+  
+  .form-title {
+    font-size: 20px;
+  }
+  
+  .form-options {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  
+  .toggle-btn {
+    padding: 10px 16px;
+    font-size: 13px;
+  }
+}

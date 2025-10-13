@@ -1,0 +1,103 @@
+.scroll-to-top {
+  position: fixed;
+  /* Respect safe-area insets (iOS) and be responsive across devices */
+  bottom: calc(max(12px, env(safe-area-inset-bottom, 0px)) + 8px);
+  right: calc(max(12px, env(safe-area-inset-right, 0px)) + 12px);
+  color: #fff;
+  font-size: clamp(16px, 4vw, 24px);
+  font-weight: 700;
+  border: none;
+  border-radius: 50%;
+  width: clamp(44px, 8vw, 64px);
+  height: clamp(44px, 8vw, 64px);
+  aspect-ratio: 1 / 1;
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.25s ease, transform 0.25s ease, visibility 0.25s ease;
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #2563eb, #06b6d4);
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.35);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.scroll-to-top.show {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+/* Tooltip container */
+.scroll-to-top .tooltip {
+  position: absolute;
+  /* Position above the button regardless of its responsive height */
+  bottom: calc(100% + 12px);
+  right: 50%;
+  transform: translateX(50%) scale(0.92);
+  background: linear-gradient(135deg, #2563eb, #06b6d4);
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: clamp(11px, 2.6vw, 13px);
+  font-weight: 500;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.35);
+}
+
+/* little arrow under tooltip */
+.scroll-to-top .tooltip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 6px;
+  border-style: solid;
+  border-color: #2563eb transparent transparent transparent;
+}
+
+/* Show tooltip on hover */
+.scroll-to-top:hover .tooltip {
+  opacity: 1;
+  transform: translateX(50%) scale(1);
+}
+
+/* Keyboard focus styles */
+.scroll-to-top:focus-visible {
+  outline: 3px solid rgba(56, 189, 248, 0.9);
+  outline-offset: 3px;
+}
+
+/* Small phones: slightly tighter placement */
+@media (max-width: 480px) {
+  .scroll-to-top {
+    bottom: calc(max(8px, env(safe-area-inset-bottom, 0px)) + 6px);
+    right: calc(max(8px, env(safe-area-inset-right, 0px)) + 8px);
+  }
+  .scroll-to-top .tooltip {
+    bottom: calc(100% + 10px);
+  }
+}
+
+/* Hide tooltip on touch-only devices (no hover) unless focused */
+@media (hover: none) {
+  .scroll-to-top .tooltip { display: none; }
+  .scroll-to-top:focus .tooltip,
+  .scroll-to-top:focus-visible .tooltip { display: block; opacity: 1; }
+}
+
+/* Respect users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .scroll-to-top {
+    transition: none;
+  }
+  .scroll-to-top .tooltip {
+    transition: none;
+  }
+}

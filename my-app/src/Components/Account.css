@@ -1,0 +1,532 @@
+.account-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(10, 10, 10, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  user-select: none;
+  -webkit-user-drag: none;
+  padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+}
+
+/* Container */
+.account-container {
+  background: #1a1a1a; /* clean background */
+  color: #f5f5f5;
+  width: min(760px, 94vw);
+  max-width: 100%;
+  max-height: min(90vh, 100svh - 16px);
+  overflow: auto;
+  padding: 16px max(16px, env(safe-area-inset-right)) 16px max(16px, env(safe-area-inset-left));
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.08); /* subtle border */
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+  animation: fadeIn 0.3s ease-in-out;
+  display: flex;
+}
+
+/* Header */
+.account-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin-bottom: 25px;
+}
+
+.account-avatar {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-bottom: 12px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.35);
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.account-name {
+  font-size: clamp(1.2rem, 2.2vw, 1.6rem);
+  font-weight: 600;
+  color: #fff;
+  margin: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  hyphens: auto;
+}
+
+.account-email {
+  font-size: clamp(0.88rem, 1.6vw, 0.95rem);
+  color: #aaa;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  hyphens: auto;
+}
+
+/* Details */
+.account-details {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 20px 0;
+}
+
+.detail-row {
+  background: #222; /* flat, simple */
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.08);
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 12px;
+  row-gap: 4px;
+  align-items: center;
+}
+
+.detail-label {
+  font-size: clamp(0.85rem, 1.6vw, 0.9rem);
+  font-weight: 500;
+  color: #bbb;
+  overflow-wrap: anywhere;
+}
+
+.detail-value {
+  font-size: clamp(0.95rem, 1.8vw, 1rem);
+  font-weight: 600;
+  color: #f1f1f1;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  hyphens: auto;
+}
+
+/* Actions */
+.account-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.account-btn {
+  background: #333;
+  color: #eee;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.9rem;
+  transition: background 0.18s ease, color 0.18s ease;
+  max-width: 100%;
+}
+
+/* Primary: Save Changes, Edit Profile */
+.account-btn.primary { background: #4a90e2; color: #fff; }
+.account-btn.primary:hover { background: #3d7ec8; }
+
+/* Secondary: Cancel, Close */
+.account-btn.secondary { background: #2f2f2f; color: #ddd; }
+.account-btn.secondary:hover { background: #3a3a3a; color: #fff; }
+
+/* Destructive */
+.account-btn.danger { background: #b22222; color: #fff; }
+.account-btn.danger:hover { background: #a11c1c; }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.avatar-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.avatar-edit-btn {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  background: #444;
+  color: #ffffff;
+  border-radius: 50%;
+  padding: 2px 3px;
+  font-size: 12px;
+  width: 22px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+.avatar-edit-btn input {
+  display: none;
+}
+
+.account-header-info .edit-input {
+  width: 100%;
+  margin: 8px 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: #f5f5f5;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  backdrop-filter: blur(8px);
+}
+
+.account-header-info .edit-input::placeholder {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+@media (max-width: 480px) {
+  .account-actions {
+    flex-direction: column;
+    gap: 10px;
+  }
+}
+
+.account-header-info .edit-field { 
+  text-align: left;
+  width: 100%;
+}
+
+.password-field { position: relative; }
+.toggle-visibility {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.sidebar-account-container {
+  display: flex;
+  height: 100%;
+  max-width: 980px;
+  margin: 0 auto;
+  background: transparent;
+  border-radius: 12px;
+  overflow: hidden;
+  align-items: stretch;
+  gap: 16px;
+}
+
+.sidebar {
+  width: clamp(200px, 28%, 260px);
+  background: #222;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.sidebar-profile {
+  text-align: center;
+}
+
+.sidebar-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.menu-btn {
+  padding: 10px 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  background: #2a2a2a;
+  color: #ddd;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s ease, color 0.2s ease;
+  text-align: left;
+}
+
+.menu-btn.active{
+  background: #333;
+  color: #fff;
+}
+
+.account-content {
+  flex: 1;
+  padding: 18px;
+  overflow-y: auto;
+  max-height: 80vh;
+  min-width: 0; /* allow content to shrink without overflowing */
+}
+.sidebar-account-container {
+  display: flex;
+  width: 100%;
+  gap: 20px; /* spacing between sidebar and content */
+}
+/* Row for multiple edit fields */
+.edit-fields-row {
+  display: flex;
+  gap: 20px;
+  row-gap: 14px;
+  flex-wrap: wrap; /* wrap on small screens */
+}
+
+/* Each field takes equal width */
+.edit-fields-row .edit-field {
+  flex: 1 1 260px; /* more breathing room */
+  min-width: 220px;
+}
+
+/* Field vertical spacing */
+.account-header-info .edit-field {
+  margin-bottom: 6px;
+}
+
+/* Password fields adjustments */
+.password-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-field input {
+  flex: 1;
+}
+
+.toggle-visibility {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0;
+}
+
+/* Responsive adjustments for very small screens */
+@media (max-width: 480px) {
+  .edit-fields-row {
+    flex-direction: column;
+  }
+}
+
+/* Medium screens stack earlier for space */
+@media (max-width: 820px) {
+  .edit-fields-row .edit-field {
+    flex: 1 1 100%;
+    min-width: 100%;
+  }
+}
+
+/* Stack sidebar above content on narrow screens */
+@media (max-width: 860px) {
+  .account-container { padding: 12px; }
+  .sidebar-account-container { flex-direction: column; gap: 12px; }
+  .sidebar { width: 100%; }
+  .account-content { max-height: none; }
+}
+.settings-content {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: #1a1a1a; /* clean background */
+  border-radius: 12px;
+}
+
+/* Titles */
+.settings-title {
+  font-size: 1.4rem;
+  font-weight: 600;
+  margin-bottom: 2px;
+  color: #fff;
+}
+
+.settings-subtitle {
+  font-size: 0.9rem;
+  color: #aaa;
+  margin-bottom: 12px;
+}
+
+/* Options container */
+.settings-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Each card */
+.settings-card {
+  background: #222; /* flat, simple */
+  border-radius: 10px;
+  padding: 14px;
+  border: 1px solid rgba(255,255,255,0.08); /* subtle border */
+}
+
+.settings-card h3 {
+  margin: 0 0 4px 0;
+  font-size: clamp(0.95rem, 1.8vw, 1rem);
+  font-weight: 500;
+  color: #fff;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  hyphens: auto;
+}
+
+.settings-card p {
+  font-size: clamp(0.82rem, 1.6vw, 0.9rem);
+  color: #999;
+  margin-bottom: 10px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  hyphens: auto;
+}
+
+/* Buttons */
+.settings-btn {
+  background: #333;
+  color: #eee;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.9rem;
+  transition: background 0.2s ease;
+}
+
+.settings-btn:hover {
+  background: #444;
+}
+
+.settings-btn.danger {
+  background: #b22222;
+}
+
+.settings-btn.danger:hover {
+  background: #a11c1c;
+}
+
+/* Variants */
+.settings-card.warning {
+  border-left: 3px solid #f4a261;
+}
+
+.settings-card.danger-zone {
+  border-left: 3px solid #e63946;
+}
+/* Modal Overlay */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 30, 39, 0.75);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 3000;
+  animation: fadeIn 0.25s ease-in-out;
+}
+
+/* Modal Box */
+.modal-container {
+  background:#1a1a1a; /* slate-800 */
+  padding: 2rem;
+  border-radius: 1rem;
+  width: 400px;
+  max-width: 90%;
+  text-align: center;
+  animation: popIn 0.25s ease-out;
+  color: #f3f4f6; /* light grey text */
+}
+
+.modal-container h3 {
+  margin-bottom: 0.75rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #f9fafb; /* near white */
+}
+
+.modal-container p {
+  color: #d1d5db; /* grey-300 */
+  font-size: 0.95rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  hyphens: auto;
+}
+
+.modal-actions {
+  margin-top: 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+/* Buttons inside modal */
+.modal-btn {
+  flex: 1;
+  padding: 0.6rem 1rem;
+  border-radius: 0.5rem;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.modal-btn.danger {
+  background: #dc2626; /* red-600 */
+  color: white;
+}
+
+.modal-btn.danger:hover {
+  background:#dc2626; /* red-700 */
+}
+
+.modal-btn.secondary {
+  background: #374151; /* slate-700 */
+  color: #f3f4f6;
+}
+
+.modal-btn.secondary:hover {
+  background: #4b5563; /* slate-600 */
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes popIn {
+  from { transform: scale(0.9); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+
+/* Prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .account-container { animation: none; }
+  .modal-overlay { animation: none; }
+  .modal-container { animation: none; }
+}
+
+/* Improve focus visibility for accessibility */
+.account-btn:focus-visible,
+.menu-btn:focus-visible,
+.settings-btn:focus-visible,
+.modal-btn:focus-visible,
+.edit-input:focus-visible,
+.toggle-visibility:focus-visible {
+  outline: 2px solid rgba(168, 85, 247, 0.6);
+  outline-offset: 2px;
+}

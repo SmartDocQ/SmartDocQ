@@ -1,0 +1,225 @@
+/* Black Theme CSS - Simple, No Transitions */
+.upload-container-dark {
+  display: flex;
+  min-height: 90vh;
+  background: linear-gradient(180deg, #0a0a0a 0%, #000000 100%);
+  color: #e0e6ed;
+  font-family: 'Inter', sans-serif;
+}
+
+.right-section {
+  display: flex;
+  flex: 1;
+}
+
+.upload-section {
+  padding: 40px;
+  text-align: center;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.upload-title {
+  font-size: 2.5rem;
+  margin-bottom: 10px;
+  background: linear-gradient(120deg, #8b5cf6, #3b82f6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: 700;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.upload-subtitle {
+  color: #8892a6;
+  margin-bottom: 30px;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.upload-box {
+  border: 2px dashed #333;
+  border-radius: 16px;
+  padding: 40px;
+  background: #0a0a0a;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.upload-box.drag-over {
+  border-color: #8b5cf6;
+  background: #111;
+}
+
+/* File Input Button */
+.file-input-wrapper {
+  position: relative;
+  margin: 0 auto 20px;
+  width: 100%;
+  max-width: 400px;
+}
+
+.file-input {
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.file-input-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  padding: 16px 24px;
+  border: 2px solid #333;
+  border-radius: 12px;
+  background: #0a0a0a;
+  color: #e0e6ed;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.file-input-button:hover {
+  border-color: #555;
+  background: #111;
+}
+
+.file-input-button svg {
+  width: 24px;
+  height: 24px;
+  fill: currentColor;
+}
+
+/* File selected indicator */
+.file-input-wrapper.has-file .file-input-button {
+  border-color: #10b981;
+  background: #064e3b;
+}
+
+.file-input-wrapper.has-file .file-input-button:hover {
+  border-color: #34d399;
+}
+
+.upload-selected {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  padding: 15px;
+  background: #111;
+  border-radius: 12px;
+  border: 1px solid #222;
+}
+
+.upload-filename {
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+.upload-meta {
+  color: #8892a6;
+  font-size: 0.9rem;
+  background: #1a1a1a;
+  padding: 4px 10px;
+  border-radius: 20px;
+}
+
+.upload-actions {
+  margin-top: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+}
+
+.upload-button {
+  padding: 14px 28px;
+  border-radius: 10px;
+  border: none;
+  background: linear-gradient(135deg, #8b5cf6, #3b82f6);
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.upload-button:hover {
+  background: linear-gradient(135deg, #7c3aed, #2563eb);
+}
+
+.upload-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.upload-hint {
+  color: #8892a6;
+}
+
+/* Simple Progress Bar (Old Style) */
+.progress {
+  height: 8px;
+  background: #1a1a1a;
+  border-radius: 10px;
+  margin-top: 20px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #8b5cf6, #3b82f6);
+  width: 0;
+}
+
+/* Layout adjustments */
+.upload-container-dark.two-cols .history-section { width: 25%; }
+.upload-container-dark.two-cols .right-section { width: 75%; }
+.upload-container-dark.three-cols .history-section { width: 20%; }
+.upload-container-dark.three-cols .chat-section { width: 35%; }
+.right-section.full-width { width: calc(100% - 50px); }
+.three-cols-container { display: flex; flex: 1; gap: 10px; }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .upload-container-dark { flex-direction: column; }
+  .history-section { width: 100% !important; border-right: none; border-bottom: 1px solid #222; }
+  .right-section { width: 100% !important; }
+  .three-cols-container { flex-direction: column; }
+  .upload-section { padding: 20px; }
+  .upload-title { font-size: 2rem; }
+}
+/* Simplified file info display */
+.file-info-simple {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 8px 12px;
+  background: #111;
+  border-radius: 8px;
+  border: 1px solid #222;
+}
+
+.file-name {
+  font-weight: 600;
+  color: #cbd5e1;
+  font-size: 0.95rem;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-size {
+  color: #8892a6;
+  font-size: 0.85rem;
+  background: #1a1a1a;
+  padding: 2px 8px;
+  border-radius: 12px;
+}

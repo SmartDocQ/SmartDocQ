@@ -1,0 +1,24 @@
+body {
+  margin: 0;
+  padding: 0;
+  background-color: black;
+  background-image: url("https://wallpapers.com/images/hd/black-zoom-background-1920-x-1080-meh5t6ccv0xyeqph.jpg");
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-attachment: fixed;
+  background-origin: border-box;
+  background-clip: border-box;
+  min-height: 100vh;
+  overflow-x: hidden;
+  position: relative;
+}
+
+html {
+  background-attachment: fixed;
+  overflow-x: hidden;
+}
+
+* {
+  box-sizing: border-box;
+}
