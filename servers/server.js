@@ -48,7 +48,8 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 // Preflight
-app.options("*", cors(corsOptions));
+// Express 5 no longer accepts '*' string paths; use a regex to match all for preflight
+app.options(/.*/, cors(corsOptions));
 
 app.use(bodyParser.json({ limit: "5mb" }));
 
