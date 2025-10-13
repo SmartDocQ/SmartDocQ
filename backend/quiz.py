@@ -107,7 +107,8 @@ def generate_quiz():
         except Exception:
             model = genai.GenerativeModel(TEXT_MODEL)
 
-        resp = model.generate_content([sys_instr, user_instr])
+        # Avoid hanging requests: limit to ~30s per generate
+        resp = model.generate_content([sys_instr, user_instr], request_options={"timeout": 30})
 
         # Extract text safely from response
         raw = ""
@@ -150,7 +151,7 @@ def generate_quiz():
                     "{\n  \"questions\": [\n    {\n      \"type\": \"mcq|true_false|short_answer\",\n      \"question\": string,\n      \"options\": [string] (for mcq only),\n      \"correct_answer\": string,\n      \"explanation\": string\n    }\n  ]\n}\n"
                     "Respond with JSON only, no extra text.\n\nContent to convert:\n" + (raw or "")
                 )
-                resp2 = model.generate_content(conv_prompt)
+                resp2 = model.generate_content(conv_prompt, request_options={"timeout": 20})
                 raw2 = (getattr(resp2, "text", "") or "").strip()
                 quiz = _parse_json_safely(raw2)
             except Exception:

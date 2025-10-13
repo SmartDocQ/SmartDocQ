@@ -10,6 +10,8 @@ import requests
 import tempfile, os, importlib
 import hashlib
 from better_profanity import profanity
+import concurrent.futures
+import threading
 profanity.load_censor_words()
 import re
 
@@ -47,6 +49,7 @@ URL_REGEX = re.compile(r"(https?://[^\s]+|www\.[^\s]+|ftp://[^\s]+|mailto:[^\s]+
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 NODE_BASE_URL = os.environ.get("NODE_BASE_URL", "http://localhost:5000")
 SERVICE_TOKEN = os.environ.get("SERVICE_TOKEN", "smartdoc-service-token")
+NODE_FETCH_TIMEOUT = int(os.environ.get("NODE_FETCH_TIMEOUT", "45"))
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
 
@@ -56,17 +59,43 @@ EMBED_MODEL = os.environ.get("EMBED_MODEL", "models/text-embedding-004")
 # Persistent Chroma DB (configurable path)
 # Use CHROMA_DB_PATH to place the vector store on a persistent disk in production (e.g., /var/data/chroma_db on Render)
 CHROMA_DB_PATH = os.environ.get("CHROMA_DB_PATH", os.path.join(os.getcwd(), "chroma_db"))
-try:
-    os.makedirs(CHROMA_DB_PATH, exist_ok=True)
-except Exception as _e:
-    # If directory creation fails, fallback to current dir to avoid startup crash
-    CHROMA_DB_PATH = os.path.join(os.getcwd(), "chroma_db")
-    try:
-        os.makedirs(CHROMA_DB_PATH, exist_ok=True)
-    except Exception:
-        pass
 
-chroma_client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
+def _ensure_dir(p: str) -> str:
+    try:
+        os.makedirs(p, exist_ok=True)
+        return p
+    except Exception as e:
+        print("[Chroma] Failed to create directory", p, "=>", e)
+        return ""
+
+def _init_chroma_client():
+    # Try env path (absolute normalized), then fallback to ./chroma_db,
+    # finally fallback to ephemeral client so the app stays up.
+    env_path = os.path.abspath(CHROMA_DB_PATH)
+    if _ensure_dir(env_path):
+        try:
+            cli = chromadb.PersistentClient(path=env_path)
+            print(f"[Chroma] Persistent path: {env_path}")
+            return cli
+        except Exception as e:
+            print("[Chroma] PersistentClient failed for", env_path, "=>", e)
+    default_path = os.path.abspath(os.path.join(os.getcwd(), "chroma_db"))
+    if _ensure_dir(default_path):
+        try:
+            cli = chromadb.PersistentClient(path=default_path)
+            print(f"[Chroma] Fallback persistent path: {default_path}")
+            return cli
+        except Exception as e:
+            print("[Chroma] PersistentClient failed for default path", default_path, "=>", e)
+    try:
+        cli = chromadb.EphemeralClient()
+        print("[Chroma] Using EphemeralClient (no persistence)")
+        return cli
+    except Exception as e:
+        # As the last resort, rethrow to fail fast
+        raise e
+
+chroma_client = _init_chroma_client()
 collection = chroma_client.get_or_create_collection("documents")
 
 def contains_link(text):
@@ -236,14 +265,23 @@ def chunk_text(text, size=1000, overlap=200):
             break
     return chunks
 
-def generate_embeddings(text):
+def _embed_call(text: str):
+    return genai.embed_content(
+        model=EMBED_MODEL,
+        content=text,
+        task_type="retrieval_document"
+    )
+
+def generate_embeddings(text, timeout_sec: int = 20):
+    """Generate embeddings with a timeout to avoid hanging requests."""
     try:
-        result = genai.embed_content(
-            model=EMBED_MODEL,
-            content=text,
-            task_type="retrieval_document"
-        )
-        return result["embedding"]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+            fut = ex.submit(_embed_call, text)
+            result = fut.result(timeout=timeout_sec)
+            return result.get("embedding") if isinstance(result, dict) else None
+    except concurrent.futures.TimeoutError:
+        print("Embedding timeout after", timeout_sec, "seconds")
+        return None
     except Exception as e:
         print("Embedding error:", e)
         return None
@@ -570,34 +608,14 @@ Question: {orig_q}
                 "answer": "⚠️ I couldn't find relevant information about your question in the uploaded document.\nDo you want me to answer using general knowledge instead? Reply \"y\" for yes or \"n\" for no.",
             })
 
-        # Ensure the document is indexed in Chroma for this doc_id.
+        # Ensure the document is indexed in Chroma for this doc_id. If not, start background indexing and return fast.
         if not has_index(doc_id):
-            ok, filename, mimetype, data_bytes = fetch_doc_from_node(doc_id)
-            if not ok:
-                return jsonify({"error": filename}), 404
-            # Scan and gate on consent before indexing
-            text_for_scan = extract_text_for_mimetype(filename, mimetype, data_bytes)
-            if not text_for_scan:
-                return jsonify({"error": "Unsupported or empty document"}), 400
-            scan = detect_sensitive(text_for_scan)
-            prev = consent_state.get(doc_id) or {}
-            consent_state[doc_id] = {
-                "sensitive": bool(scan.get("found")),
-                "confirmed": bool(prev.get("confirmed", False)),
-                "awaiting": False,
-                "last_scan": "ok",
-                "summary": scan,
-            }
-            if scan.get("found") and not prev.get("confirmed", False):
-                return jsonify({
-                    "answer": "⚠️ Sensitive or private information detected in this document (e.g., personal IDs, contact info, or financial data).\nDo you still want to proceed with chatting about it? (y/n)",
-                    "requireConfirmation": True,
-                    "sensitiveSummary": scan,
-                })
-            # Proceed to index when allowed
-            indexed, _ = index_bytes(doc_id, filename, mimetype, data_bytes)
-            if not indexed:
-                return jsonify({"error": "Unsupported or empty document"}), 400
+            # Kick off background indexing once per doc_id to avoid blocking
+            _start_background_indexing(doc_id)
+            return jsonify({
+                "answer": "Indexing this document in the background. Please try your question again in ~30–60 seconds.",
+                "requireConfirmation": False
+            })
 
         # Generate embedding for the question
         q_emb = generate_embeddings(question)
@@ -698,7 +716,7 @@ def fetch_doc_from_node(doc_id: str):
         url = f"{NODE_BASE_URL}/api/document/{doc_id}/download"
         # Use service token for server-to-server auth
         headers = {"x-service-token": SERVICE_TOKEN}
-        r = requests.get(url, headers=headers, timeout=20)
+        r = requests.get(url, headers=headers, timeout=NODE_FETCH_TIMEOUT)
         if r.status_code != 200:
             return False, f"Node returned {r.status_code}", None, None
         # Try to parse filename from headers; fallback
@@ -710,6 +728,44 @@ def fetch_doc_from_node(doc_id: str):
         return True, filename, mimetype, r.content
     except Exception as e:
         return False, str(e), None, None
+
+# --- Background indexing support ---
+_indexing_in_progress = set()
+_indexing_lock = threading.Lock()
+
+def _background_index(doc_id: str):
+    try:
+        ok, filename, mimetype, data_bytes = fetch_doc_from_node(doc_id)
+        if not ok:
+            return
+        # Scan and respect consent before indexing
+        text_for_scan = extract_text_for_mimetype(filename, mimetype, data_bytes)
+        if not text_for_scan:
+            return
+        scan = detect_sensitive(text_for_scan)
+        prev = consent_state.get(doc_id) or {}
+        consent_state[doc_id] = {
+            "sensitive": bool(scan.get("found")),
+            "confirmed": bool(prev.get("confirmed", False)),
+            "awaiting": False,
+            "last_scan": "ok",
+            "summary": scan,
+        }
+        if scan.get("found") and not prev.get("confirmed", False):
+            # Do not index until consent
+            return
+        index_bytes(doc_id, filename, mimetype, data_bytes)
+    finally:
+        with _indexing_lock:
+            _indexing_in_progress.discard(doc_id)
+
+def _start_background_indexing(doc_id: str):
+    with _indexing_lock:
+        if doc_id in _indexing_in_progress:
+            return
+        _indexing_in_progress.add(doc_id)
+    th = threading.Thread(target=_background_index, args=(doc_id,), daemon=True)
+    th.start()
 
 def has_index(doc_id: str) -> bool:
     res = collection.get(where={"doc_id": doc_id})

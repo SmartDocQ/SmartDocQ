@@ -137,7 +137,7 @@ def generate_flashcards():
         def _generate_batch(to_generate: int, existing_fronts: list[str]):
             """Ask model for a batch of flashcards and return normalized list."""
             prompt = _build_user_instr(to_generate, existing_fronts)
-            resp_local = model.generate_content([sys_instr, prompt])
+            resp_local = model.generate_content([sys_instr, prompt], request_options={"timeout": 30})
             raw_local = (getattr(resp_local, "text", "") or "").strip()
             data_local = _parse_json_safely(raw_local)
             if data_local is None:
@@ -147,7 +147,7 @@ def generate_flashcards():
                         "{\n  \"flashcards\": [\n    {\n      \"front\": string,\n      \"back\": string,\n      \"category\": string,\n      \"difficulty\": \"Easy|Medium|Hard\"\n    }\n  ]\n}\n"
                         "Respond with JSON only, no extra text.\n\nContent to convert:\n" + (raw_local or "")
                     )
-                    resp2 = model.generate_content(conv_prompt)
+                    resp2 = model.generate_content(conv_prompt, request_options={"timeout": 20})
                     raw2 = (getattr(resp2, "text", "") or "").strip()
                     data_local = _parse_json_safely(raw2)
                 except Exception:
