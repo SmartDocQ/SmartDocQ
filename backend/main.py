@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify, send_file
+from werkzeug.exceptions import HTTPException
 from flask_cors import CORS
 import os, io, PyPDF2
 from docx import Document as DocxDocument
@@ -35,6 +36,13 @@ for entry in _raw_allow:
         import re as _re
         domain = _re.escape(entry[2:])  # drop *.
         _allow_processed.append(fr"https?://.*\.{domain}$")
+    elif entry.startswith("http://*.") or entry.startswith("https://*."):
+        # Support scheme-qualified wildcard like "https://*.vercel.app"
+        import re as _re
+        scheme, rest = entry.split("://", 1)
+        domain = rest[2:]  # drop *.
+        domain_escaped = _re.escape(domain)
+        _allow_processed.append(fr"{scheme}://.*\.{domain_escaped}$")
     else:
         _allow_processed.append(entry)
 
@@ -293,6 +301,11 @@ def generate_embeddings(text, timeout_sec: int = 20):
 def healthz():
     return jsonify({"status": "ok"})
 
+# ---- ROOT ----
+@app.route("/", methods=["GET", "HEAD"]) 
+def root():
+    return jsonify({"service": "SmartDocQ Flask", "status": "ok"})
+
 # ---- INDEX FROM ATLAS (optional manual trigger) ----
 @app.route("/api/index-from-atlas", methods=["POST"])
 def index_from_atlas():
@@ -496,9 +509,16 @@ def delete_doc(doc_id):
     return jsonify({"message": "Deleted successfully"})
 
 # ---- ASK ----
-# Global error handler to ensure JSON always
+# Specific HTTP 404 as JSON (avoid 500s on unknown paths)
+@app.errorhandler(404)
+def handle_404(e):
+    return jsonify({"error": "Not found"}), 404
+
+# Global error handler to ensure JSON always (non-HTTP exceptions)
 @app.errorhandler(Exception)
 def handle_exception(e):
+    if isinstance(e, HTTPException):
+        return jsonify({"error": e.description}), getattr(e, "code", 500)
     print("Unhandled Exception:", e)
     return jsonify({"error": str(e)}), 500
 
@@ -663,7 +683,8 @@ Question: {question}
 Answer strictly from the context with proper formatting:
 """
         model = genai.GenerativeModel(TEXT_MODEL)
-        response = model.generate_content(prompt)
+        # Avoid hanging: cap model call to ~30s
+        response = model.generate_content(prompt, request_options={"timeout": 30})
 
         # Return AI answer with improved formatting
         if response and response.text:
