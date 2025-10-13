@@ -1,0 +1,35 @@
+# Node
+node_modules/
+.npmrc
+
+# Build artifacts
+build/
+dist/
+.next/
+.vercel/
+
+# Python
+__pycache__/
+*.pyc
+.env
+.env.*
+*.env
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local DB caches
+**/chroma_db/
+**/pdf_cache/
+
+# Coverage
+coverage/
+
+# IDE
+.vscode/
+.idea/
