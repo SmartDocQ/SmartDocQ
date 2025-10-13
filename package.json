@@ -1,0 +1,11 @@
+{
+  "dependencies": {
+    "focus-trap-react": "^11.0.4",
+    "gsap": "^3.13.0",
+    "i18next": "^25.5.2",
+    "i18next-browser-languagedetector": "^8.2.0",
+    "i18next-http-backend": "^3.0.2",
+    "pdfkit": "^0.17.2",
+    "react-i18next": "^15.7.3"
+  }
+}
