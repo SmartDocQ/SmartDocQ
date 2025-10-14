@@ -7,6 +7,11 @@
     "dev": "node server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "engines": {
+    "node": "20.x",
+    "npm": ">=10 <11.99"
+  },
+  "packageManager": "npm@10.9.3",
   "keywords": [],
   "author": "",
   "license": "ISC",
