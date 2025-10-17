@@ -12,6 +12,9 @@ import f4 from "../Animations/f4.json";
 import f5 from "../Animations/f5.json";
 import f6 from "../Animations/f6.json";
 import f7 from "../Animations/f7.json";
+import f8 from "../Animations/f8.json";
+import f9 from "../Animations/f9.json";
+import f10 from "../Animations/f10.json";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "./ToastContext";
 
@@ -85,14 +88,56 @@ const HeroSection = () => {
   };
 
   const features = [
-    { title: "Seamless Document Upload", desc: "Upload your PDFs, Word files, or text documents in seconds. SmartDocQ automatically reads, organizes, and prepares them for AI processing — so you can search and analyze instantly without any manual effort.", anim: f1 },
-    { title: "Smart Question Answering", desc: "Ask any question in plain language, and SmartDocQ quickly finds relevant document sections. Advanced AI generates accurate, context-aware answers instantly.", anim: f2 },
-    { title: "Context-Aware Personalization", desc: "SmartDocQ remembers your previous interactions to provide follow-up answers that are tailored and relevant. Enjoy a smarter, more personalized AI experience every time.", anim: f3 },
-    { title: "Interactive Feedback", desc: "Rate answers instantly and help SmartDocQ improve over time. Your feedback ensures more accurate and reliable responses in future sessions.", anim: f4 },
-    { title: "Session History", desc: "SmartDocQ keeps a record of all your past questions and answers. Easily revisit previous sessions to review or continue your work seamlessly.", anim: f5 },
-    { title: "Robust Security", desc: "All uploads and queries are validated and sanitized to keep your data safe. SmartDocQ protects against attacks and ensures a secure, worry-free experience.", anim: f6 },
-    { title: "Export & Share Results", desc: "Quickly save answers, summaries, or insights as PDF or DOCX. Share your findings effortlessly with just a few clicks.", anim: f7 }
-  ];
+  {
+    title: "Seamless Document Upload",
+    desc: "Upload files directly from your device or through secure URLs. SmartDocQ supports PDF, DOCX, and TXT formats with real-time document preview, quick processing, and smooth organization for instant access.",
+    anim: f1
+  },
+  {
+    title: "Smart Question Answering",
+    desc: "Simply ask your questions in plain language and get precise, context-aware answers drawn from your documents. SmartDocQ delivers accurate, meaningful responses in seconds using advanced AI understanding.",
+    anim: f2
+  },
+  {
+    title: "Auto Question & Quiz Generation",
+    desc: "Turn your documents into interactive learning experiences. SmartDocQ automatically generates MCQs, True/False, and short-answer questions with progress tracking, instant feedback, and detailed scoring.",
+    anim: f3
+  },
+  {
+    title: "Context-Aware Personalization",
+    desc: "Every session becomes smarter. SmartDocQ remembers your previous chats, understands context, and provides personalized follow-up answers for a natural, connected conversation flow.",
+    anim: f4
+  },
+  {
+    title: "Interactive Feedback System",
+    desc: "Your opinions matter. Instantly rate answers, provide feedback, and help SmartDocQ evolve with more accurate and refined responses over time.",
+    anim: f5
+  },
+  {
+    title: "Session & Document History",
+    desc: "Stay organized with complete access to your uploaded files and chat sessions. View, rename, delete, or export data anytime — everything neatly tracked with timestamps and file details.",
+    anim: f6
+  },
+  {
+    title: "Multi-Format & Web Support",
+    desc: "SmartDocQ adapts to your workflow by supporting multiple file types — PDF, DOCX, TXT, and web pages — ensuring flexibility for any use case or document source.",
+    anim: f7
+  },
+  {
+    title: "Advanced Security & Protection",
+    desc: "Your privacy is our priority. SmartDocQ validates every upload and chat, blocks harmful input, filters profanity, and detects spam — keeping your workspace safe and professional.",
+    anim: f8
+  },
+  {
+    title: "Admin Dashboard & Monitoring",
+    desc: "A powerful admin panel lets you manage users, track document processing, monitor system activity, and review usage statistics — all in one intuitive interface.",
+    anim:f9
+  },
+  {
+    title: "Smart Document Management",
+    desc: "Manage multiple documents effortlessly. Rename, delete, or clear chats with confirmation, and export conversations or summaries in just a few clicks.",
+    anim:f10
+  }];
 
   return (
     <>
