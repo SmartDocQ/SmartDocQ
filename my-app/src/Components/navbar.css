@@ -129,7 +129,10 @@
   background: none;
   font-size: 18px;
   cursor: pointer;
+  color: #000;
+  transition: none;
 }
+
 .avatar{
   width: 36px;
   height: 36px;

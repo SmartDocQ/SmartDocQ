@@ -124,13 +124,26 @@
   padding-right: 45px !important;
 }
 
+/* Hide browser's default password reveal button */
+.password-input-wrapper input::-ms-reveal,
+.password-input-wrapper input::-ms-clear {
+  display: none;
+}
+
+.password-input-wrapper input::-webkit-credentials-auto-fill-button,
+.password-input-wrapper input::-webkit-contacts-auto-fill-button {
+  visibility: hidden;
+  position: absolute;
+  right: 0;
+}
+
 .password-toggle-btn {
   position: absolute;
   right: 3px;
   background: transparent;
   border: none;
   cursor: pointer;
-  font-size: 16px;
+  font-size: 16.5px;
   padding: 6px 6px;
   display: flex;
   align-items: center;
@@ -138,6 +151,7 @@
   user-select: none;
   line-height: 1;
   height: 32px;
+  z-index: 10;
 }
 
 .password-toggle-btn:active {
@@ -524,7 +538,7 @@
   }
 
   .password-toggle-btn {
-    font-size: 14px;
+    font-size: 14.5px;
     right: 2px;
     padding: 5px 5px;
   }
