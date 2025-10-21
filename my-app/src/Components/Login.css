@@ -121,22 +121,24 @@
 
 .password-input-wrapper input {
   width: 100%;
-  padding-right: 45px;
+  padding-right: 50px !important;
 }
 
 .password-toggle-btn {
   position: absolute;
-  right: 12px;
+  right: 8px;
   background: transparent;
   border: none;
   cursor: pointer;
-  font-size: 20px;
-  padding: 4px;
+  font-size: 18px;
+  padding: 6px 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: transform 0.2s ease;
   user-select: none;
+  line-height: 1;
+  height: 32px;
 }
 
 .password-toggle-btn:hover {
@@ -527,6 +529,12 @@
   }
 
   .password-toggle-btn {
-    font-size: 18px;
+    font-size: 16px;
+    right: 6px;
+    padding: 5px 6px;
+  }
+
+  .password-input-wrapper input {
+    padding-right: 45px !important;
   }
 }
