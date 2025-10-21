@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import "./Login.css";
 import { useToast } from "./ToastContext";
 import { apiUrl } from "../config";
+import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
 
 function Login({ onAuthSuccess = () => {} }) {
   const { showToast } = useToast();
@@ -118,11 +119,50 @@ function Login({ onAuthSuccess = () => {} }) {
     }
   }; 
 
+  // Google Sign-In success handler
+  const handleGoogleSuccess = async (credentialResponse) => {
+    setLoading(true);
+    try {
+      const res = await fetch(apiUrl("/api/auth/google"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ credential: credentialResponse.credential }),
+      });
+
+      const result = await res.json();
+
+      if (res.ok) {
+        const { token, user } = result;
+        if (token) localStorage.setItem("token", token);
+        if (user) localStorage.setItem("user", JSON.stringify(user));
+
+        // Check if user is admin and redirect accordingly
+        if (user && user.isAdmin) {
+          showToast("Welcome Admin! Redirecting to admin panel...", { type: "success" });
+          setTimeout(() => navigate("/admin"), 1000);
+        } else {
+          showToast("Signed in with Google successfully!", { type: "success" });
+          onAuthSuccess(user || {});
+        }
+      } else {
+        showToast(result.message || "Google Sign-In failed", { type: "error" });
+      }
+    } catch (err) {
+      console.error("Google Sign-In error:", err);
+      showToast("Google Sign-In failed", { type: "error" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Get ref for first error dynamically
   const getRef = (field) => errors[field] ? firstErrorRef : null;
 
+  const googleClientId = process.env.REACT_APP_GOOGLE_CLIENT_ID || "env-413285385721-9m2mss22ie2d40ljirmvvje3u30ebc4e.apps.googleusercontent.com";
+
   return (
-    <div className="auth-container">
+    <GoogleOAuthProvider clientId={googleClientId}>
+      <div className="auth-container">
       <div className="form-toggle">
         <button className={`toggle-btn ${isLogin ? "active" : ""}`} onClick={() => setIsLogin(true)}>Sign In</button>
         <button className={`toggle-btn ${!isLogin ? "active" : ""}`} onClick={() => setIsLogin(false)}>Sign Up</button>
@@ -146,6 +186,23 @@ function Login({ onAuthSuccess = () => {} }) {
               {errors.password && <span className="error-message">{errors.password}</span>}
             </div><br/>
             <button type="submit" className="submit-btn" disabled={loading}>{loading ? "Processing..." : "Sign In"}</button>
+            
+            <div className="divider">
+              <span>OR</span>
+            </div>
+            
+            <div className="google-btn-wrapper">
+              <GoogleLogin
+                onSuccess={handleGoogleSuccess}
+                onError={() => showToast("Google Sign-In Failed", { type: "error" })}
+                useOneTap
+                theme="filled_blue"
+                size="large"
+                text="signin_with"
+                shape="rectangular"
+                width="100%"
+              />
+            </div>
           </form>
         </div>
       </div>
@@ -177,10 +234,27 @@ function Login({ onAuthSuccess = () => {} }) {
               {errors.confirmPassword && <span className="error-message">{errors.confirmPassword}</span>}
             </div><br/>
             <button type="submit" className="submit-btn" disabled={loading}>{loading ? "Processing..." : "Create Account"}</button>
+            
+            <div className="divider">
+              <span>OR</span>
+            </div>
+            
+            <div className="google-btn-wrapper">
+              <GoogleLogin
+                onSuccess={handleGoogleSuccess}
+                onError={() => showToast("Google Sign-In Failed", { type: "error" })}
+                theme="filled_blue"
+                size="large"
+                text="signup_with"
+                shape="rectangular"
+                width="100%"
+              />
+            </div>
           </form>
         </div>
       </div>
-    </div>
+      </div>
+    </GoogleOAuthProvider>
   );
 }
 

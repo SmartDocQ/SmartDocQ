@@ -3,7 +3,9 @@ const mongoose = require("mongoose");
 const userSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-  password: { type: String, required: true },
+  password: { type: String, required: false }, // Optional for Google users
+  googleId: { type: String, unique: true, sparse: true }, // Google OAuth ID
+  authProvider: { type: String, enum: ["local", "google"], default: "local" }, // Track auth method
   avatar: { type: String,default:null },
   lastLogin: { type: Date, default: null },
   lastPasswordChange: { type: Date, default: null },

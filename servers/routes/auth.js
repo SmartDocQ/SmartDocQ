@@ -10,6 +10,7 @@ const cloudinary = require('cloudinary').v2;
 const Chat = require("../models/Chat");
 const Document = require("../models/Document");
 const ContactReport = require("../models/ContactReport");
+const { OAuth2Client } = require('google-auth-library');
 
 // Simple auth middleware to verify JWT and attach userId
 function verifyToken(req, res, next) {
@@ -39,8 +40,18 @@ router.post("/signup", async (req, res) => {
     const existingUser = await User.findOne({ email });
     if (existingUser) return res.status(400).json({ message: "User already exists" });
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const user = new User({ name, email, password: hashedPassword });
+    // Password is optional for Google OAuth users
+    if (!password && !req.body.googleId) {
+      return res.status(400).json({ message: "Password is required for local signup" });
+    }
+
+    const hashedPassword = password ? await bcrypt.hash(password, 10) : undefined;
+    const user = new User({ 
+      name, 
+      email, 
+      password: hashedPassword,
+      authProvider: "local"
+    });
     await user.save();
 
     res.status(201).json({ message: "User registered successfully" });
@@ -330,5 +341,87 @@ router.post("/me/avatar", verifyToken, avatarUpload.single("avatar"), async (req
     streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
   } catch (err) {
     return res.status(500).json({ message: err.message || "Failed to upload avatar" });
+  }
+});
+// ===== GOOGLE OAUTH =====
+// Initialize Google OAuth client
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+// Google Sign-In (verify token from frontend)
+router.post('/google', async (req, res) => {
+  try {
+    const { credential } = req.body; // Google JWT token from @react-oauth/google
+    
+    if (!credential) {
+      return res.status(400).json({ message: 'No credential provided' });
+    }
+
+    // Verify the Google token
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+    const { sub: googleId, email, name, picture } = payload;
+
+    if (!email) {
+      return res.status(400).json({ message: 'Email not provided by Google' });
+    }
+
+    // Check if user exists
+    let user = await User.findOne({ $or: [{ googleId }, { email }] });
+
+    if (user) {
+      // Existing user - link Google account if not already linked
+      if (!user.googleId) {
+        user.googleId = googleId;
+        user.authProvider = 'google';
+        if (picture && !user.avatar) user.avatar = picture;
+        await user.save();
+      }
+      
+      // Update last login
+      user.lastLogin = new Date();
+      await user.save();
+    } else {
+      // Create new user with Google auth
+      user = new User({
+        name: name || email.split('@')[0],
+        email,
+        googleId,
+        authProvider: 'google',
+        avatar: picture || null,
+        lastLogin: new Date(),
+        isActive: true,
+      });
+      await user.save();
+    }
+
+    // Block if deactivated
+    if (user.isActive === false) {
+      return res.status(403).json({ message: 'Account is deactivated. Contact support.' });
+    }
+
+    // Generate JWT
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+
+    res.json({
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        avatar: user.avatar,
+        isAdmin: user.isAdmin || false,
+        role: user.role || 'user',
+        createdAt: user.createdAt,
+        lastLogin: user.lastLogin,
+      },
+      isAdmin: user.isAdmin || false,
+    });
+  } catch (err) {
+    console.error('Google auth error:', err);
+    return res.status(500).json({ message: 'Google authentication failed', error: err.message });
   }
 });

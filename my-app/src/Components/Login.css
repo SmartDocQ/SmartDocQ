@@ -210,6 +210,47 @@
   transform: translateY(0);
 }
 
+/* Google Sign-In Styling */
+.divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 16px 0;
+  color: #9ca3af;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.divider::before,
+.divider::after {
+  content: "";
+  flex: 1;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.divider span {
+  padding: 0 12px;
+}
+
+.google-btn-wrapper {
+  display: flex;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.google-btn-wrapper > div {
+  width: 100% !important;
+}
+
+.google-btn-wrapper button {
+  width: 100% !important;
+  justify-content: center !important;
+  border-radius: 8px !important;
+  height: 44px !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+}
+
 /* Responsive adjustments for smaller screens */
 @media (max-width: 480px) {
   .auth-container {
