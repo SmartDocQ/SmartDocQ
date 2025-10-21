@@ -129,8 +129,18 @@
   background: none;
   font-size: 18px;
   cursor: pointer;
-  color: #000;
-  transition: none;
+  color: #000 !important;
+  transition: background 0.2s ease;
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+.popup .close-btn {
+  color: #000 !important;
+}
+
+.close-btn:hover {
+  background: rgba(0, 0, 0, 0.08) !important;
 }
 
 .avatar{
