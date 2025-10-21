@@ -112,6 +112,48 @@
   background: #fff;
 }
 
+/* Password input wrapper for eye icon */
+.password-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-input-wrapper input {
+  width: 100%;
+  padding-right: 45px;
+}
+
+.password-toggle-btn {
+  position: absolute;
+  right: 12px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 20px;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease;
+  user-select: none;
+}
+
+.password-toggle-btn:hover {
+  transform: scale(1.1);
+}
+
+.password-toggle-btn:active {
+  transform: scale(0.95);
+}
+
+/* Password row - side by side */
+.password-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
 .input-group input:focus {
   outline: none;
   border-color: #a855f7;
@@ -439,6 +481,13 @@
 }
 
 /* Responsive adjustments for smaller screens */
+@media (max-width: 768px) {
+  .password-row {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}
+
 @media (max-width: 480px) {
   .auth-container {
     gap: 20px;
@@ -469,5 +518,15 @@
 
   .strength-header {
     font-size: 12px;
+  }
+
+  /* Stack password fields vertically on mobile */
+  .password-row {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .password-toggle-btn {
+    font-size: 18px;
   }
 }

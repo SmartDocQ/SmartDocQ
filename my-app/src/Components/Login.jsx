@@ -14,6 +14,11 @@ function Login({ onAuthSuccess = () => {} }) {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [passwordStrength, setPasswordStrength] = useState({ score: 0, label: "", requirements: {} });
+  const [showPassword, setShowPassword] = useState({
+    login: false,
+    signup: false,
+    confirm: false
+  });
 
   const firstErrorRef = useRef(null);
 
@@ -45,6 +50,11 @@ function Login({ onAuthSuccess = () => {} }) {
     else label = "Strong";
 
     return { score, label, requirements };
+  };
+
+  // Toggle password visibility
+  const togglePasswordVisibility = (field) => {
+    setShowPassword(prev => ({ ...prev, [field]: !prev[field] }));
   };
 
   // Universal input handler
@@ -219,7 +229,25 @@ function Login({ onAuthSuccess = () => {} }) {
             </div>
             <div className="input-group">
               <label>Password</label>
-              <input ref={getRef("password")} type="password" name="password" placeholder="Enter your password" value={loginData.password} onChange={(e) => handleChange(e, "login")} className={errors.password ? "input-error" : ""} />
+              <div className="password-input-wrapper">
+                <input 
+                  ref={getRef("password")} 
+                  type={showPassword.login ? "text" : "password"} 
+                  name="password" 
+                  placeholder="Enter your password" 
+                  value={loginData.password} 
+                  onChange={(e) => handleChange(e, "login")} 
+                  className={errors.password ? "input-error" : ""} 
+                />
+                <button 
+                  type="button" 
+                  className="password-toggle-btn"
+                  onClick={() => togglePasswordVisibility('login')}
+                  aria-label="Toggle password visibility"
+                >
+                  {showPassword.login ? '🙈' : '👁️'}
+                </button>
+              </div>
               {errors.password && <span className="error-message">{errors.password}</span>}
             </div><br/>
             <button type="submit" className="submit-btn" disabled={loading}>{loading ? "Processing..." : "Sign In"}</button>
@@ -260,53 +288,96 @@ function Login({ onAuthSuccess = () => {} }) {
               <input ref={getRef("email")} type="email" name="email" placeholder="Enter your email" value={signupData.email} onChange={(e) => handleChange(e, "signup")} className={errors.email ? "input-error" : ""} />
               {errors.email && <span className="error-message">{errors.email}</span>}
             </div>
-            <div className="input-group">
-              <label>Password</label>
-              <input ref={getRef("password")} type="password" name="password" placeholder="Create a password" value={signupData.password} onChange={(e) => handleChange(e, "signup")} className={errors.password ? "input-error" : ""} />
-              {errors.password && <span className="error-message">{errors.password}</span>}
+            
+            {/* Password fields side by side */}
+            <div className="password-row">
+              <div className="input-group">
+                <label>Password</label>
+                <div className="password-input-wrapper">
+                  <input 
+                    ref={getRef("password")} 
+                    type={showPassword.signup ? "text" : "password"} 
+                    name="password" 
+                    placeholder="Create a password" 
+                    value={signupData.password} 
+                    onChange={(e) => handleChange(e, "signup")} 
+                    className={errors.password ? "input-error" : ""} 
+                  />
+                  <button 
+                    type="button" 
+                    className="password-toggle-btn"
+                    onClick={() => togglePasswordVisibility('signup')}
+                    aria-label="Toggle password visibility"
+                  >
+                    {showPassword.signup ? '🙈' : '👁️'}
+                  </button>
+                </div>
+                {errors.password && <span className="error-message">{errors.password}</span>}
+              </div>
               
-              {/* Password Strength Meter */}
-              {signupData.password && (
-                <div className="password-strength-container">
-                  <div className="strength-header">
-                    <span className="strength-label" data-strength={passwordStrength.label.toLowerCase()}>
-                      {passwordStrength.label}
-                    </span>
-                    <span className="strength-percentage">{passwordStrength.score}%</span>
+              <div className="input-group">
+                <label>Confirm Password</label>
+                <div className="password-input-wrapper">
+                  <input 
+                    ref={getRef("confirmPassword")} 
+                    type={showPassword.confirm ? "text" : "password"} 
+                    name="confirmPassword" 
+                    placeholder="Confirm your password" 
+                    value={signupData.confirmPassword} 
+                    onChange={(e) => handleChange(e, "signup")} 
+                    className={errors.confirmPassword ? "input-error" : ""} 
+                  />
+                  <button 
+                    type="button" 
+                    className="password-toggle-btn"
+                    onClick={() => togglePasswordVisibility('confirm')}
+                    aria-label="Toggle password visibility"
+                  >
+                    {showPassword.confirm ? '🙈' : '👁️'}
+                  </button>
+                </div>
+                {errors.confirmPassword && <span className="error-message">{errors.confirmPassword}</span>}
+              </div>
+            </div>
+            
+            {/* Password Strength Meter */}
+            {signupData.password && (
+              <div className="password-strength-container">
+                <div className="strength-header">
+                  <span className="strength-label" data-strength={passwordStrength.label.toLowerCase()}>
+                    {passwordStrength.label}
+                  </span>
+                  <span className="strength-percentage">{passwordStrength.score}%</span>
+                </div>
+                <div className="strength-bar-wrapper">
+                  <div 
+                    className="strength-bar" 
+                    data-strength={passwordStrength.label.toLowerCase()}
+                    style={{ width: `${passwordStrength.score}%` }}
+                  ></div>
+                </div>
+                <div className="requirements-grid">
+                  <div className={`requirement ${passwordStrength.requirements.length ? 'met' : ''}`}>
+                    <span className="check-icon">{passwordStrength.requirements.length ? '✓' : '○'}</span>
+                    <span>8+ characters</span>
                   </div>
-                  <div className="strength-bar-wrapper">
-                    <div 
-                      className="strength-bar" 
-                      data-strength={passwordStrength.label.toLowerCase()}
-                      style={{ width: `${passwordStrength.score}%` }}
-                    ></div>
+                  <div className={`requirement ${passwordStrength.requirements.uppercase ? 'met' : ''}`}>
+                    <span className="check-icon">{passwordStrength.requirements.uppercase ? '✓' : '○'}</span>
+                    <span>1 uppercase</span>
                   </div>
-                  <div className="requirements-grid">
-                    <div className={`requirement ${passwordStrength.requirements.length ? 'met' : ''}`}>
-                      <span className="check-icon">{passwordStrength.requirements.length ? '✓' : '○'}</span>
-                      <span>8+ characters</span>
-                    </div>
-                    <div className={`requirement ${passwordStrength.requirements.uppercase ? 'met' : ''}`}>
-                      <span className="check-icon">{passwordStrength.requirements.uppercase ? '✓' : '○'}</span>
-                      <span>1 uppercase</span>
-                    </div>
-                    <div className={`requirement ${passwordStrength.requirements.number ? 'met' : ''}`}>
-                      <span className="check-icon">{passwordStrength.requirements.number ? '✓' : '○'}</span>
-                      <span>1 number</span>
-                    </div>
-                    <div className={`requirement ${passwordStrength.requirements.special ? 'met' : ''}`}>
-                      <span className="check-icon">{passwordStrength.requirements.special ? '✓' : '○'}</span>
-                      <span>1 special char</span>
-                    </div>
+                  <div className={`requirement ${passwordStrength.requirements.number ? 'met' : ''}`}>
+                    <span className="check-icon">{passwordStrength.requirements.number ? '✓' : '○'}</span>
+                    <span>1 number</span>
+                  </div>
+                  <div className={`requirement ${passwordStrength.requirements.special ? 'met' : ''}`}>
+                    <span className="check-icon">{passwordStrength.requirements.special ? '✓' : '○'}</span>
+                    <span>1 special char</span>
                   </div>
                 </div>
-              )}
-            </div>
-            <div className="input-group">
-              <label>Confirm Password</label>
-              <input ref={getRef("confirmPassword")} type="password" name="confirmPassword" placeholder="Confirm your password" value={signupData.confirmPassword} onChange={(e) => handleChange(e, "signup")} className={errors.confirmPassword ? "input-error" : ""} />
-              {errors.confirmPassword && <span className="error-message">{errors.confirmPassword}</span>}
-            </div><br/>
+              </div>
+            )}
+            
+            <br/>
             <button type="submit" className="submit-btn" disabled={loading}>{loading ? "Processing..." : "Create Account"}</button>
             
             <div className="divider">
