@@ -240,6 +240,8 @@
 
 .google-btn-wrapper > div {
   width: 100% !important;
+  display: flex !important;
+  justify-content: center !important;
 }
 
 .google-btn-wrapper button {
@@ -249,6 +251,23 @@
   height: 44px !important;
   font-size: 14px !important;
   font-weight: 500 !important;
+}
+
+/* Force center alignment for Google button content */
+.google-btn-wrapper button > div {
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  width: 100% !important;
+}
+
+/* Center the text and icon inside Google button */
+.google-btn-wrapper button span,
+.google-btn-wrapper button div[role="button"] {
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  text-align: center !important;
 }
 
 /* Responsive adjustments for smaller screens */
