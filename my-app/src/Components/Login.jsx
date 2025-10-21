@@ -13,8 +13,39 @@ function Login({ onAuthSuccess = () => {} }) {
   const [signupData, setSignupData] = useState({ email: "", username: "", password: "", confirmPassword: "" });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [passwordStrength, setPasswordStrength] = useState({ score: 0, label: "", requirements: {} });
 
   const firstErrorRef = useRef(null);
+
+  // Calculate password strength
+  const calculatePasswordStrength = (password) => {
+    if (!password) {
+      return { score: 0, label: "", requirements: {} };
+    }
+
+    let score = 0;
+    const requirements = {
+      length: password.length >= 8,
+      uppercase: /[A-Z]/.test(password),
+      number: /[0-9]/.test(password),
+      special: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password),
+    };
+
+    // Scoring system
+    if (requirements.length) score += 25;
+    if (requirements.uppercase) score += 20;
+    if (/[a-z]/.test(password)) score += 15; // lowercase
+    if (requirements.number) score += 20;
+    if (requirements.special) score += 20;
+
+    // Determine label
+    let label = "";
+    if (score < 40) label = "Weak";
+    else if (score < 70) label = "Medium";
+    else label = "Strong";
+
+    return { score, label, requirements };
+  };
 
   // Universal input handler
   const handleChange = (e, type) => {
@@ -22,6 +53,12 @@ function Login({ onAuthSuccess = () => {} }) {
     const setter = type === "login" ? setLoginData : setSignupData;
     setter(prev => ({ ...prev, [name]: value }));
     if (errors[name]) setErrors(prev => ({ ...prev, [name]: "" }));
+
+    // Calculate password strength for signup password field
+    if (type === "signup" && name === "password") {
+      const strength = calculatePasswordStrength(value);
+      setPasswordStrength(strength);
+    }
   };
 
   // Focus on first error
@@ -227,6 +264,43 @@ function Login({ onAuthSuccess = () => {} }) {
               <label>Password</label>
               <input ref={getRef("password")} type="password" name="password" placeholder="Create a password" value={signupData.password} onChange={(e) => handleChange(e, "signup")} className={errors.password ? "input-error" : ""} />
               {errors.password && <span className="error-message">{errors.password}</span>}
+              
+              {/* Password Strength Meter */}
+              {signupData.password && (
+                <div className="password-strength-container">
+                  <div className="strength-header">
+                    <span className="strength-label" data-strength={passwordStrength.label.toLowerCase()}>
+                      {passwordStrength.label}
+                    </span>
+                    <span className="strength-percentage">{passwordStrength.score}%</span>
+                  </div>
+                  <div className="strength-bar-wrapper">
+                    <div 
+                      className="strength-bar" 
+                      data-strength={passwordStrength.label.toLowerCase()}
+                      style={{ width: `${passwordStrength.score}%` }}
+                    ></div>
+                  </div>
+                  <div className="requirements-grid">
+                    <div className={`requirement ${passwordStrength.requirements.length ? 'met' : ''}`}>
+                      <span className="check-icon">{passwordStrength.requirements.length ? '✓' : '○'}</span>
+                      <span>8+ characters</span>
+                    </div>
+                    <div className={`requirement ${passwordStrength.requirements.uppercase ? 'met' : ''}`}>
+                      <span className="check-icon">{passwordStrength.requirements.uppercase ? '✓' : '○'}</span>
+                      <span>1 uppercase</span>
+                    </div>
+                    <div className={`requirement ${passwordStrength.requirements.number ? 'met' : ''}`}>
+                      <span className="check-icon">{passwordStrength.requirements.number ? '✓' : '○'}</span>
+                      <span>1 number</span>
+                    </div>
+                    <div className={`requirement ${passwordStrength.requirements.special ? 'met' : ''}`}>
+                      <span className="check-icon">{passwordStrength.requirements.special ? '✓' : '○'}</span>
+                      <span>1 special char</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="input-group">
               <label>Confirm Password</label>
