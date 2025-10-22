@@ -299,12 +299,8 @@ router.put("/me", verifyToken, async (req, res) => {
   }
 });
 
-
-module.exports = router;
-module.exports.verifyToken = verifyToken;
-
 // Middleware to ensure current user is active (skip for special admin)
-module.exports.ensureActive = async function ensureActive(req, res, next) {
+const ensureActive = async function ensureActive(req, res, next) {
   try {
     if (req.isSpecialAdmin) return next();
     const user = await User.findById(req.userId).select('isActive');
@@ -659,3 +655,8 @@ router.post('/google', async (req, res) => {
     return res.status(500).json({ message: 'Google authentication failed', error: err.message });
   }
 });
+
+// Export router and utilities at the end
+module.exports = router;
+module.exports.verifyToken = verifyToken;
+module.exports.ensureActive = ensureActive;
