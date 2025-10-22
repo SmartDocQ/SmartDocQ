@@ -18,15 +18,22 @@ const { OAuth2Client } = require('google-auth-library');
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   host: 'smtp.gmail.com',
-  port: 587,
-  secure: false, // use TLS
+  port: 465, // Use port 465 for SSL (more likely to work on hosting platforms)
+  secure: true, // Use SSL
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS ? process.env.EMAIL_PASS.replace(/\s/g, '') : undefined // Remove any spaces from app password
-  }
+  },
+  connectionTimeout: 10000, // 10 seconds
+  greetingTimeout: 10000,
+  socketTimeout: 10000
 });
 
 // Verify email configuration on startup
+console.log('🔍 Email Configuration Check:');
+console.log('EMAIL_USER:', process.env.EMAIL_USER ? '✓ Set' : '✗ Missing');
+console.log('EMAIL_PASS:', process.env.EMAIL_PASS ? '✓ Set' : '✗ Missing');
+
 transporter.verify(function(error, success) {
   if (error) {
     console.error('❌ Email configuration error:', error.message);
