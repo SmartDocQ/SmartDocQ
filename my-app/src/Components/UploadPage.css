@@ -234,7 +234,7 @@
   right: -8px;
   width: 22px;
   height: 22px;
-  border-radius: 50%;
+  border-radius: 4px; /* small rounded square */
   border: 1px solid #444;
   background: #161616;
   color: #cbd5e1;
@@ -265,7 +265,7 @@
   padding: 8px 12px;
   background: #111;
   border: 1px solid #222;
-  border-radius: 999px;
+  border-radius: 8px; /* rectangle chips */
 }
 
 .chip-name {
@@ -291,7 +291,7 @@
   right: -7px;
   width: 20px;
   height: 20px;
-  border-radius: 50%;
+  border-radius: 4px; /* small rounded square */
   border: 1px solid #444;
   background: #161616;
   color: #cbd5e1;

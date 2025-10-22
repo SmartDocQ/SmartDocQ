@@ -33,6 +33,7 @@ const UploadPage = () => {
 
 
   const isOverDrop = useRef(false);
+  const fileInputRef = useRef(null);
 
   // Supported file types: PDF, Word, and Text only
   const supportedTypes = useMemo(
@@ -203,6 +204,13 @@ const UploadPage = () => {
       if (prev) URL.revokeObjectURL(prev);
       return "";
     });
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  // Clear only the selection UI (keep any open preview/chat)
+  const clearFileSelection = () => {
+    setFiles([]);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   // Remove an individual file from the current selection
@@ -268,6 +276,8 @@ const UploadPage = () => {
         message += ` (${convertedCount} Word document${convertedCount > 1 ? 's' : ''} converted to PDF)`;
       }
       showToast && showToast(message, { type: "success" });
+      // Clear just the selected files UI after successful batch upload
+      clearFileSelection();
     } else {
       const f0 = selected[0];
       let message = `Uploaded ${sanitizeFilename(f0.name)}`;
@@ -313,6 +323,8 @@ const UploadPage = () => {
         }
       }
     }
+    // Clear file chooser selection after any upload
+    clearFileSelection();
     fetchHistory();
 
   } catch (err) {
@@ -652,6 +664,7 @@ const sendMessage = async () => {
                   onChange={handleFileChange}
                   className="file-input"
                   id="file-upload"
+                  ref={fileInputRef}
                 />
                 <label htmlFor="file-upload" className="file-input-button">
                   <svg viewBox="0 0 24 24">
