@@ -14,33 +14,33 @@ const Document = require("../models/Document");
 const ContactReport = require("../models/ContactReport");
 const { OAuth2Client } = require('google-auth-library');
 
-// Configure email transporter
+// Configure email transporter - use Gmail service (bypasses port restrictions)
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  host: 'smtp.gmail.com',
-  port: 465, // Use port 465 for SSL (more likely to work on hosting platforms)
-  secure: true, // Use SSL
+  service: 'gmail', // Using 'service' instead of manual host/port bypasses some firewall issues
   auth: {
     user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS ? process.env.EMAIL_PASS.replace(/\s/g, '') : undefined // Remove any spaces from app password
-  },
-  connectionTimeout: 10000, // 10 seconds
-  greetingTimeout: 10000,
-  socketTimeout: 10000
+    pass: process.env.EMAIL_PASS ? process.env.EMAIL_PASS.replace(/\s/g, '') : undefined
+  }
 });
 
-// Verify email configuration on startup
+// Verify email configuration on startup (non-blocking)
 console.log('🔍 Email Configuration Check:');
 console.log('EMAIL_USER:', process.env.EMAIL_USER ? '✓ Set' : '✗ Missing');
 console.log('EMAIL_PASS:', process.env.EMAIL_PASS ? '✓ Set' : '✗ Missing');
 
-transporter.verify(function(error, success) {
-  if (error) {
-    console.error('❌ Email configuration error:', error.message);
-  } else {
-    console.log('✅ Email server is ready to send messages');
-  }
-});
+// Don't block server startup if email verification fails
+if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+  transporter.verify(function(error, success) {
+    if (error) {
+      console.warn('⚠️  Email configuration warning:', error.message);
+      console.warn('💡 Emails may not work, but server will continue running');
+    } else {
+      console.log('✅ Email server is ready to send messages');
+    }
+  });
+} else {
+  console.warn('⚠️  Email credentials not configured - forgot password feature disabled');
+}
 
 // Simple auth middleware to verify JWT and attach userId
 function verifyToken(req, res, next) {
@@ -398,9 +398,9 @@ router.post("/forgot-password", async (req, res) => {
     // Send email
     try {
       const mailOptions = {
-        from: `"SmartDoc" <${process.env.EMAIL_USER}>`,
+        from: `"SmartDocQ" <${process.env.EMAIL_USER}>`,
         to: user.email,
-        subject: 'Password Reset Request - SmartDoc',
+        subject: 'Password Reset Request - SmartDocQ',
         html: `
           <!DOCTYPE html>
           <html>
@@ -509,9 +509,9 @@ router.post("/reset-password/:token", async (req, res) => {
     // Send confirmation email
     try {
       const mailOptions = {
-        from: `"SmartDoc" <${process.env.EMAIL_USER}>`,
+        from: `"SmartDocQ" <${process.env.EMAIL_USER}>`,
         to: user.email,
-        subject: 'Password Reset Successful - SmartDoc',
+        subject: 'Password Reset Successful - SmartDocQ',
         html: `
           <!DOCTYPE html>
           <html>

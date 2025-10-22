@@ -21,8 +21,8 @@ This checklist lets you deploy without running anything locally.
   - FRONTEND_ORIGINS = https://<your-vercel-domain>, *.vercel.app
   - FRONTEND_URL = https://<your-vercel-domain>
   - SERVICE_TOKEN = <shared-strong-secret>
-  - EMAIL_USER = smartdocq@gmail.com
-  - EMAIL_PASS = pnaq ukmn obli xdew
+  - EMAIL_USER = urmail@gmail.com
+  - EMAIL_PASS = pnaq ukmn obli xdew (Gmail App Password - spaces will be auto-removed by code)
   - GOOGLE_CLIENT_ID = <your-google-oauth-client-id>
   - GOOGLE_CLIENT_SECRET = <your-google-oauth-client-secret>
   - CLOUDINARY_CLOUD_NAME = (optional)
