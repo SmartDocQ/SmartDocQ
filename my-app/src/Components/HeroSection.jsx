@@ -49,16 +49,24 @@ const HeroSection = () => {
     const section = sectionRef.current;
 
     // Disable GSAP horizontal scroll on small screens or when reduced motion is preferred
-    const disableAnim = reduceMotion || window.innerWidth <= 768 || container.scrollWidth <= window.innerWidth;
+    const disableAnim =
+      reduceMotion ||
+      window.innerWidth <= 768 ||
+      container.scrollWidth <= section.clientWidth;
     if (disableAnim) return;
 
+    // Match scroll distance to the actual horizontal overflow to avoid "stuck" at the end
+    const getDistance = () => Math.max(0, container.scrollWidth - section.clientWidth);
+    let distance = getDistance();
+    if (distance === 0) return; // nothing to scroll
+
     const tween = gsap.to(container, {
-      x: () => -(container.scrollWidth - window.innerWidth) + "px",
+      x: () => -getDistance() + "px",
       ease: "none",
       scrollTrigger: {
         trigger: section,
         start: "top top",
-        end: () => "+=" + container.scrollWidth,
+        end: () => "+=" + getDistance(),
         scrub: true,
         pin: true,
         anticipatePin: 1,
@@ -66,8 +74,18 @@ const HeroSection = () => {
       },
     });
 
-    const handleResize = () => ScrollTrigger.refresh();
+    const handleResize = () => {
+      distance = getDistance();
+      ScrollTrigger.refresh();
+    };
     window.addEventListener("resize", handleResize);
+
+    // Observe container/content size changes (e.g., when adding more feature cards)
+    const ro = new ResizeObserver(() => {
+      distance = getDistance();
+      ScrollTrigger.refresh();
+    });
+    ro.observe(container);
 
     return () => {
       if (tween) {
@@ -75,6 +93,7 @@ const HeroSection = () => {
         tween.kill();
       }
       window.removeEventListener("resize", handleResize);
+      ro.disconnect();
     };
   }, [isMounted, reduceMotion]);
 
