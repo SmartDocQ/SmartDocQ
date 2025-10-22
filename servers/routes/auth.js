@@ -4,6 +4,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const nodemailer = require("nodemailer");
+const fetch = require('node-fetch');
 const User = require("../models/User");
 const multer = require("multer");
 const path = require("path");
@@ -38,9 +39,53 @@ function buildTransporters() {
 
 const transporters = buildTransporters();
 
+// HTTPS Email API (Resend) fallback/primary sender
+async function sendViaResend(mailOptions) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) throw new Error('RESEND_API_KEY not set');
+  const from = process.env.RESEND_FROM || mailOptions.from;
+  const body = {
+    from,
+    to: Array.isArray(mailOptions.to) ? mailOptions.to : [mailOptions.to],
+    subject: mailOptions.subject,
+    html: mailOptions.html || undefined,
+    text: mailOptions.text || undefined,
+  };
+
+  const resp = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    const msg = data?.message || data?.error || `HTTP ${resp.status}`;
+    const err = new Error(`Resend send failed: ${msg}`);
+    err.code = 'RESEND_ERROR';
+    throw err;
+  }
+  console.log('📨 Email sent via Resend', data?.id ? `id=${data.id}` : '');
+  return { messageId: data?.id || null, accepted: body.to };
+}
+
 async function sendMailWithFallback(mailOptions) {
-  if (!transporters.length) throw new Error('Email credentials not configured');
   let lastErr;
+  // Prefer HTTPS API when configured (avoids SMTP egress blocks like ETIMEDOUT)
+  if (process.env.RESEND_API_KEY) {
+    try {
+      const info = await sendViaResend(mailOptions);
+      return info;
+    } catch (e) {
+      lastErr = e;
+      console.warn('⚠️  Resend attempt failed:', e?.code || e?.message || e);
+    }
+  }
+
+  if (!transporters.length) throw lastErr || new Error('Email credentials not configured');
   for (let i = 0; i < transporters.length; i++) {
     try {
       const info = await transporters[i].sendMail(mailOptions);
@@ -53,6 +98,22 @@ async function sendMailWithFallback(mailOptions) {
   }
   throw lastErr || new Error('All email transports failed');
 }
+
+// At startup, try verifying transporters to surface connectivity issues early
+setImmediate(async () => {
+  if (!transporters.length) {
+    console.warn('✗ No email transporters configured. Set EMAIL_USER and EMAIL_PASS.');
+    return;
+  }
+  for (let i = 0; i < transporters.length; i++) {
+    try {
+      await transporters[i].verify();
+      console.log(`✅ Email transporter #${i + 1} verified and ready.`);
+    } catch (e) {
+      console.warn(`❌ Email transporter #${i + 1} verify failed:`, e?.code || e?.message || e);
+    }
+  }
+});
 
 // Derive the frontend base URL without using FRONTEND_URL.
 // Preference order: request Origin header -> first exact entry from FRONTEND_ORIGINS -> localhost
@@ -424,7 +485,12 @@ router.post("/forgot-password", async (req, res) => {
   const resetUrl = `${baseUrl}/reset-password/${resetToken}`;
 
     // Respond immediately so UI isn't blocked by SMTP connectivity
-    res.json({ message: "If an account exists with this email, a reset link has been sent" });
+    const responsePayload = { message: "If an account exists with this email, a reset link has been sent" };
+    // Expose reset URL in non-production or when explicitly enabled for debugging
+    if (process.env.EXPOSE_RESET_URL === 'true' || process.env.NODE_ENV !== 'production') {
+      responsePayload.debug = { resetUrl };
+    }
+    res.json(responsePayload);
 
     // Fire-and-forget email send (won't block HTTP response)
     setImmediate(async () => {
@@ -668,6 +734,38 @@ router.post('/google', async (req, res) => {
   } catch (err) {
     console.error('Google auth error:', err);
     return res.status(500).json({ message: 'Google authentication failed', error: err.message });
+  }
+});
+
+// ===== OPS: EMAIL TEST (secured) =====
+// Send a test email to verify SMTP connectivity. In production, requires x-ops-key header to match OPS_KEY.
+router.get('/_ops/email-test', async (req, res) => {
+  try {
+    const isProd = process.env.NODE_ENV === 'production';
+    const opsKey = process.env.OPS_KEY || '';
+    if (isProd && (!opsKey || (req.headers['x-ops-key'] !== opsKey))) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    if (!transporters.length) {
+      return res.status(500).json({ message: 'Email not configured (missing EMAIL_USER/PASS)' });
+    }
+
+    const to = (req.query.to || process.env.EMAIL_USER || '').toString();
+    if (!to) {
+      return res.status(400).json({ message: 'Provide ?to=email@example.com or set EMAIL_USER' });
+    }
+
+    const info = await sendMailWithFallback({
+      from: `"SmartDocQ" <${process.env.EMAIL_USER}>`,
+      to,
+      subject: 'SmartDocQ SMTP test',
+      text: 'This is a test email from SmartDocQ to verify SMTP connectivity.',
+    });
+
+    return res.json({ ok: true, messageId: info?.messageId || null, accepted: info?.accepted || [] });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: e?.code || e?.message || String(e) });
   }
 });
 
