@@ -5,11 +5,12 @@ import { useLocation, Link } from 'react-router-dom';
 const Footer = () => {
   const location = useLocation();
   const isUploadPage = location.pathname === "/upload";
+  const isHelpPage = location.pathname === "/help";
 
   const year = new Date().getFullYear();
 
   return (
-    <footer className={`footer ${isUploadPage ? 'upload-footer' : ''}`} role="contentinfo">
+    <footer className={`footer ${isUploadPage ? 'upload-footer' : ''} ${isHelpPage ? 'footer--flush' : ''}`} role="contentinfo">
       <div className="footer-container">
         <div className="footer-main" aria-label="Footer navigation">
           <section className="footer-section company-info">

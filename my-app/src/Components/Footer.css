@@ -7,6 +7,7 @@
   user-select: none;
   -webkit-user-drag: none;
 }
+.footer--flush { margin-top: 0 !important; }
 .footer.upload-footer {
   margin-top:0;
   background: linear-gradient(135deg, #0a0a0a, #111111, #000000);
