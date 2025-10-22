@@ -296,8 +296,8 @@ const AdminStats = ({ data, onRefresh }) => {
         <h3 className="section-title">Real-time Metrics</h3>
         <div className="metrics-grid">
           <div className="metric-item">
-            <div className="metric-label">Active Users</div>
-            <div className="metric-value">{enhancedStats.activeToday || 0}</div>
+            <div className="metric-label">Online Users</div>
+            <div className="metric-value">{enhancedStats.onlineUsers || 0}</div>
             <div className="metric-chart">
               <ResponsiveContainer width="100%" height={50}>
                 <BarChart data={userGrowthData.slice(-3)}>
