@@ -8,6 +8,8 @@ const userSchema = new mongoose.Schema({
   authProvider: { type: String, enum: ["local", "google"], default: "local" }, // Track auth method
   avatar: { type: String,default:null },
   lastLogin: { type: Date, default: null },
+  lastSeenAt: { type: Date, default: null },
+  isOnline: { type: Boolean, default: false },
   lastPasswordChange: { type: Date, default: null },
   passwordChangeCount: { type: Number, default: 0 },
   passwordChangeWindowStart: { type: Date, default: null },
@@ -22,6 +24,7 @@ const userSchema = new mongoose.Schema({
 userSchema.index({ email: 1 });
 userSchema.index({ name: 1 });
 userSchema.index({ createdAt: -1 });
+userSchema.index({ lastSeenAt: -1 });
 
 module.exports = mongoose.model("User", userSchema);
 

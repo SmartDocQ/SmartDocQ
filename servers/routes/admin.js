@@ -74,19 +74,14 @@ router.get("/dashboard", verifyToken, isAdmin, async (req, res) => {
     const onlineWindowMin = Math.max(1, parseInt(process.env.ONLINE_WINDOW_MINUTES || '10', 10));
     const since = new Date(Date.now() - onlineWindowMin * 60 * 1000);
 
-    // Compute online users by union of recent lastLogin, recent chats, and recent document activity
-    const [recentLoginUsers, recentChatUsers, recentDocUsers] = await Promise.all([
-      // Users who logged in recently and are active
-      User.distinct('_id', { lastLogin: { $gte: since }, isActive: true }).catch(() => []),
-      // Users who chatted recently
+    // Compute online users prefers presence fields (lastSeenAt/isOnline), falls back to activity
+    const [presenceUsers, recentChatUsers, recentDocUsers] = await Promise.all([
+      User.distinct('_id', { isActive: true, $or: [ { lastSeenAt: { $gte: since } }, { isOnline: true } ] }).catch(() => []),
       Chat.distinct('user', { updatedAt: { $gte: since } }).catch(() => []),
-      // Users who uploaded recently
       Document.distinct('user', { uploadedAt: { $gte: since } }).catch(() => []),
     ]);
 
-    const onlineSet = new Set();
-    // Union all sources of recent activity
-    recentLoginUsers.forEach(u => onlineSet.add(String(u)));
+    const onlineSet = new Set(presenceUsers.map(u => String(u)));
     recentChatUsers.forEach(u => onlineSet.add(String(u)));
     recentDocUsers.forEach(u => onlineSet.add(String(u)));
     const onlineUsers = onlineSet.size;

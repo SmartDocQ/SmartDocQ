@@ -83,11 +83,21 @@ const AdminDashboard = () => {
         </div>
         <h1 className="admin-title">Admin Panel</h1>
         <div className="admin-actions">
-          <button className="logout-btn" onClick={() => {
+          <button className="logout-btn" onClick={async () => {
             if (window.confirm("Are you sure you want to logout?")) {
-              localStorage.removeItem("token");
-              localStorage.removeItem("user");
-              window.location.href = "/";
+              try {
+                const token = localStorage.getItem("token");
+                if (token) {
+                  await fetch(apiUrl("/api/auth/logout"), {
+                    method: "POST",
+                    headers: { "Authorization": `Bearer ${token}` }
+                  }).catch(() => {});
+                }
+              } finally {
+                localStorage.removeItem("token");
+                localStorage.removeItem("user");
+                window.location.href = "/";
+              }
             }
           }}>
             Logout

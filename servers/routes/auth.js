@@ -25,8 +25,14 @@ function verifyToken(req, res, next) {
     // Handle special admin token
     if (decoded.id === "admin_special" && decoded.isAdmin) {
       req.isSpecialAdmin = true;
+      return next();
     }
-    
+    // Lightweight presence update (fire-and-forget)
+    try {
+      // Avoid awaiting; do not block request
+      User.updateOne({ _id: req.userId }, { $set: { lastSeenAt: new Date(), isOnline: true } }).catch(() => {});
+    } catch (_) { /* ignore */ }
+
     next();
   } catch (err) {
     return res.status(401).json({ message: "Invalid or expired token" });
@@ -415,5 +421,32 @@ router.post('/google', async (req, res) => {
   } catch (err) {
     console.error('Google auth error:', err);
     return res.status(500).json({ message: 'Google authentication failed', error: err.message });
+  }
+});
+
+// Presence: mark user offline on logout (client should call this before clearing token)
+router.post('/logout', verifyToken, async (req, res) => {
+  try {
+    if (req.isSpecialAdmin) {
+      // Nothing to persist for special admin
+      return res.json({ message: 'Logged out' });
+    }
+    await User.updateOne({ _id: req.userId }, { $set: { isOnline: false, lastSeenAt: new Date(0) } });
+    return res.json({ message: 'Logged out' });
+  } catch (err) {
+    return res.status(500).json({ message: err.message || 'Logout failed' });
+  }
+});
+
+// Presence: optional heartbeat to keep user online without heavy polling
+router.post('/heartbeat', verifyToken, async (req, res) => {
+  try {
+    if (req.isSpecialAdmin) {
+      return res.json({ ok: true });
+    }
+    await User.updateOne({ _id: req.userId }, { $set: { isOnline: true, lastSeenAt: new Date() } });
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ message: err.message || 'Heartbeat failed' });
   }
 });
