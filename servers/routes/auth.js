@@ -17,9 +17,12 @@ const { OAuth2Client } = require('google-auth-library');
 // Configure email transporter
 const transporter = nodemailer.createTransport({
   service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false, // use TLS
   auth: {
     user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
+    pass: process.env.EMAIL_PASS ? process.env.EMAIL_PASS.replace(/\s/g, '') : undefined // Remove any spaces from app password
   }
 });
 
@@ -441,14 +444,19 @@ router.post("/forgot-password", async (req, res) => {
       };
 
       await transporter.sendMail(mailOptions);
-      console.log(`Password reset email sent to: ${user.email}`);
+      console.log(`✅ Password reset email sent successfully to: ${user.email}`);
 
       res.json({ 
         message: "Password reset link sent to your email"
       });
 
     } catch (emailError) {
-      console.error('Email sending error:', emailError);
+      console.error('❌ Email sending error:', emailError);
+      console.error('Error details:', {
+        code: emailError.code,
+        command: emailError.command,
+        response: emailError.response
+      });
       
       // Rollback - clear the token if email fails
       user.resetPasswordToken = undefined;
