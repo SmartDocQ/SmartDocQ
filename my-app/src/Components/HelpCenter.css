@@ -3,7 +3,7 @@
   background: radial-gradient(1200px 600px at 10% -10%, rgba(0, 212, 255, 0.06), transparent 60%),
               radial-gradient(1000px 500px at 90% 0%, rgba(0, 255, 136, 0.05), transparent 60%),
               linear-gradient(135deg, #0a0a0a 0%, #000 50%, #0f0f0f 100%);
-  padding: 32px 0 0 0; /* remove bottom padding to eliminate gap above footer */
+  padding: 32px 0 12px 0; /* small bottom breathing room below last card */
 }
 
 .help-center {
@@ -73,7 +73,7 @@
   backdrop-filter: blur(6px);
   scroll-margin-top: 90px; /* keep anchored sections visible below sticky nav */
 }
-.hc-section:last-of-type { margin-bottom: 12px; } /* slight breathing room above footer */
+.hc-section:last-of-type { margin-bottom: 0; } /* bottom spacing handled by page padding */
 .hc-title {
   font-size: 1.25rem;
   margin-bottom: 10px;
