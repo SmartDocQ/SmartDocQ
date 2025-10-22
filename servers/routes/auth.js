@@ -66,17 +66,9 @@ router.post("/login", async (req, res) => {
   const password = req.body.password || "";
   const email = emailRaw.toLowerCase().trim();
   try {
-    // Special admin login - hardcoded credentials
+    // Special admin login - hardcoded credentials (fast path, no DB check)
     if (email === "admin123@gmail.com" && password === "adminhere") {
-      // If there is a DB user for admin, honor isActive flag
-      try {
-        const dbAdmin = await User.findOne({ email: "admin123@gmail.com" });
-        if (dbAdmin && dbAdmin.isActive === false) {
-          return res.status(403).json({ message: "Account is deactivated. Contact support." });
-        }
-      } catch (_) {}
-
-      // Create a special admin token
+      // Create a special admin token immediately
       const adminToken = jwt.sign({ 
         id: "admin_special", 
         isAdmin: true, 
