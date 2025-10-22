@@ -21,16 +21,33 @@ export default function Top() {
       // Temporarily disable pinned ScrollTriggers (e.g., Features horizontal section)
       const pins = ScrollTrigger.getAll().filter(st => !!st.pin);
       pins.forEach(st => st.disable());
-      // Jump to the top (auto avoids conflicts with pinned scrub)
-      window.scrollTo({ top: 0, behavior: "auto" });
-      // Re-enable after a tick and refresh measurements
-      setTimeout(() => {
+
+      // After layout recalculates, perform a smooth scroll to the very top
+      const cleanup = () => {
+        window.removeEventListener("scroll", handleScroll);
         pins.forEach(st => st.enable());
         ScrollTrigger.refresh();
-      }, 40);
+        clearTimeout(fallbackTimer);
+      };
+
+      const handleScroll = () => {
+        if (window.scrollY <= 0) {
+          cleanup();
+        }
+      };
+
+      window.addEventListener("scroll", handleScroll, { passive: true });
+
+      // Fallback: ensure we re-enable pins even if the browser interrupts smooth scroll
+      const fallbackTimer = setTimeout(() => cleanup(), 1800);
+
+      // Use rAF to ensure DOM has applied pin disable before starting smooth scroll
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
     } catch (_) {
       // Fallback
-      window.scrollTo({ top: 0, behavior: "auto" });
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
 
