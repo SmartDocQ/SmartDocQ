@@ -141,7 +141,7 @@ const HeroSection = () => {
     title: "Multi-Format & Web Support",
     desc: "SmartDocQ adapts to your workflow by supporting multiple file types — PDF, DOCX, TXT, and web pages — ensuring flexibility for any use case or document source.",
     anim: f7,
-    size: 180
+    size: 210
   },
   {
     title: "Advanced Security & Protection",
