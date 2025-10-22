@@ -1,6 +1,6 @@
 import './Footer.css';
 import { FaGithub, FaLinkedin, FaTwitter, FaDiscord } from 'react-icons/fa';
-import { useLocation } from 'react-router-dom';
+import { useLocation, Link } from 'react-router-dom';
 
 const Footer = () => {
   const location = useLocation();
@@ -20,7 +20,7 @@ const Footer = () => {
               Revolutionizing document processing with cutting-edge AI technology. Experience the future of intelligent document automation.
             </p>
             <nav className="social-links" aria-label="Social links">
-              <a href="https://github.com/" className="social-link" aria-label="GitHub" target="_blank" rel="noreferrer noopener">
+              <a href="https://github.com/SmartDocQ/SmartDocQ.git" className="social-link" aria-label="GitHub" target="_blank" rel="noreferrer noopener">
                 <FaGithub />
               </a>
               <a href="https://www.linkedin.com/in/smart-docq-230215382/" className="social-link" aria-label="LinkedIn" target="_blank" rel="noreferrer noopener">
@@ -38,8 +38,8 @@ const Footer = () => {
           <section className="footer-section support">
             <h4>Support</h4>
             <ul className="footer-links">
-              <li><a href="#help">Help Center</a></li>
-              <li><a href="#faq">FAQ</a></li>
+              <li><Link to="/help">Help Center</Link></li>
+              <li><Link to="/help#faq">FAQ</Link></li>
             </ul>
           </section>
 
@@ -55,8 +55,8 @@ const Footer = () => {
               <p>&copy; {year} SmartDocQ. All rights reserved.</p>
             </div>
             <div className="legal-links">
-              <a href="#privacy">Privacy Policy</a>
-              <a href="#terms">Terms of Service</a>
+              <Link to="/help#privacy">Privacy Policy</Link>
+              <Link to="/help#terms">Terms of Service</Link>
             </div>
           </div>
         </div>

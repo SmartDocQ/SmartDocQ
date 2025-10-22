@@ -10,6 +10,7 @@ import Login from './Components/Login';
 import AdminRoute from './Components/Admin/AdminRoute';
 import { ToastProvider } from './Components/ToastContext';
 import "./App.css";
+import HelpCenter from './Components/HelpCenter';
 
 function App() {
   return (                                      
@@ -56,6 +57,17 @@ function Main() {
           <>
             <Navbar />
             <Login />
+            <Footer />
+          </>
+        }
+      />
+      
+      <Route
+        path="/help"
+        element={
+          <>
+            <Navbar />
+            <HelpCenter />
             <Footer />
           </>
         }
