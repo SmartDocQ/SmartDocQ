@@ -20,6 +20,7 @@ const AdminDashboard = () => {
     settings: {}
   });
   const [loading, setLoading] = useState(true);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const fetchAdminData = useCallback(async () => {
     try {
@@ -83,13 +84,7 @@ const AdminDashboard = () => {
         </div>
         <h1 className="admin-title">Admin Panel</h1>
         <div className="admin-actions">
-          <button className="logout-btn" onClick={() => {
-            if (window.confirm("Are you sure you want to logout?")) {
-              localStorage.removeItem("token");
-              localStorage.removeItem("user");
-              window.location.href = "/";
-            }
-          }}>
+          <button className="logout-btn" onClick={() => setShowLogoutModal(true)}>
             Logout
           </button>
         </div>
@@ -114,6 +109,38 @@ const AdminDashboard = () => {
           {renderTabContent()}
         </main>
       </div>
+
+      {/* Logout Modal */}
+      {showLogoutModal && (
+        <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="logout-title">
+          <div className="modal-card">
+            <div className="modal-header">
+              <h3 id="logout-title">Confirm Logout</h3>
+            </div>
+            <div className="modal-body">
+              <p>Are you sure you want to logout?</p>
+            </div>
+            <div className="modal-actions">
+              <button
+                className="btn btn-secondary"
+                onClick={() => setShowLogoutModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-danger"
+                onClick={() => {
+                  localStorage.removeItem("token");
+                  localStorage.removeItem("user");
+                  window.location.href = "/";
+                }}
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
