@@ -17,11 +17,23 @@ const QA = ({ q, a }) => (
 
 export default function HelpCenter() {
   return (
-    <div className="help-center">
-      <header className="hc-hero">
-        <h1>Help Center</h1>
-        <p>Quick answers and guides for SmartDocQ.</p>
-      </header>
+    <div className="help-center-page">
+      <div className="help-center">
+        <header className="hc-hero">
+          <h1>Help Center</h1>
+          <p>Quick answers and guides for SmartDocQ.</p>
+        </header>
+
+        <nav className="hc-nav" aria-label="Help Center navigation">
+          <a href="#getting-started">Getting Started</a>
+          <a href="#uploads">Uploads</a>
+          <a href="#qa">Chat & Q/A</a>
+          <a href="#study">Study</a>
+          <a href="#account">Account</a>
+          <a href="#faq">FAQ</a>
+          <a href="#troubleshooting">Troubleshoot</a>
+          <a href="#contact">Contact</a>
+        </nav>
 
       <Section id="getting-started" title="Getting Started">
         <ul>
@@ -87,6 +99,7 @@ export default function HelpCenter() {
       <Section id="terms" title="Terms of Service">
         <p>Use SmartDocQ responsibly. Avoid uploading sensitive or illegal content. Service availability and features may change over time.</p>
       </Section>
+      </div>
     </div>
   );
 }

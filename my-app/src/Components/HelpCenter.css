@@ -1,6 +1,14 @@
+/* Page wrapper with creative black gradient background */
+.help-center-page {
+  background: radial-gradient(1200px 600px at 10% -10%, rgba(0, 212, 255, 0.06), transparent 60%),
+              radial-gradient(1000px 500px at 90% 0%, rgba(0, 255, 136, 0.05), transparent 60%),
+              linear-gradient(135deg, #0a0a0a 0%, #000 50%, #0f0f0f 100%);
+  padding: 32px 0 48px 0;
+}
+
 .help-center {
-  max-width: 960px;
-  margin: 40px auto;
+  max-width: 1040px;
+  margin: 0 auto;
   padding: 0 20px;
   color: #e0e0e0;
 }
@@ -21,7 +29,49 @@
 
 .hc-hero p { color: #a0a0a0; }
 
-.hc-section { margin: 28px 0; }
+.hc-nav {
+  position: sticky;
+  top: 64px;
+  z-index: 2;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: 10px 12px;
+  margin: 0 auto 16px auto;
+  max-width: 980px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  backdrop-filter: blur(6px);
+}
+
+.hc-nav a {
+  color: #cfe9ff;
+  text-decoration: none;
+  font-size: 0.92rem;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+  transition: all 0.2s ease;
+}
+
+.hc-nav a:hover {
+  color: #00ffb0;
+  border-color: rgba(0,255,136,0.35);
+  transform: translateY(-1px);
+}
+
+.hc-section {
+  margin: 24px 0;
+  padding: 16px 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.06);
+  background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+  box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+  backdrop-filter: blur(6px);
+}
 .hc-title {
   font-size: 1.25rem;
   margin-bottom: 10px;
@@ -30,11 +80,13 @@
 .hc-body ul { padding-left: 18px; }
 .hc-body li { margin: 6px 0; color: #b0b0b0; }
 
-.hc-qa { background: #121212; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 10px 14px; margin: 10px 0; }
+.hc-qa { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 10px 14px; margin: 10px 0; }
 .hc-qa summary { cursor: pointer; color: #d0d0d0; }
 .hc-a { margin-top: 8px; color: #b3b3b3; }
 
 @media (max-width: 600px) {
-  .help-center { margin: 24px auto; }
+  .help-center-page { padding-top: 20px; }
+  .help-center { margin: 0 auto; }
   .hc-hero h1 { font-size: 1.6rem; }
+  .hc-nav { top: 56px; gap: 8px; }
 }
