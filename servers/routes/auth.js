@@ -14,32 +14,59 @@ const Document = require("../models/Document");
 const ContactReport = require("../models/ContactReport");
 const { OAuth2Client } = require('google-auth-library');
 
-// Configure email transporter - use Gmail service (bypasses port restrictions)
-const transporter = nodemailer.createTransport({
-  service: 'gmail', // Using 'service' instead of manual host/port bypasses some firewall issues
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS ? process.env.EMAIL_PASS.replace(/\s/g, '') : undefined
-  }
-});
-
-// Verify email configuration on startup (non-blocking)
+// Email sending: build multiple transporters and fallback if one path fails
 console.log('🔍 Email Configuration Check:');
 console.log('EMAIL_USER:', process.env.EMAIL_USER ? '✓ Set' : '✗ Missing');
 console.log('EMAIL_PASS:', process.env.EMAIL_PASS ? '✓ Set' : '✗ Missing');
 
-// Don't block server startup if email verification fails
-if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-  transporter.verify(function(error, success) {
-    if (error) {
-      console.warn('⚠️  Email configuration warning:', error.message);
-      console.warn('💡 Emails may not work, but server will continue running');
-    } else {
-      console.log('✅ Email server is ready to send messages');
+function buildTransporters() {
+  const user = process.env.EMAIL_USER;
+  const pass = (process.env.EMAIL_PASS || '').replace(/\s/g, '');
+  if (!user || !pass) return [];
+
+  const auth = { user, pass };
+  const configs = [
+    // 1) Simple Gmail service
+    { service: 'gmail', auth },
+    // 2) Explicit SSL (465)
+    { host: 'smtp.gmail.com', port: 465, secure: true, auth, connectionTimeout: 10000, socketTimeout: 10000 },
+    // 3) STARTTLS (587)
+    { host: 'smtp.gmail.com', port: 587, secure: false, auth, connectionTimeout: 10000, socketTimeout: 10000 }
+  ];
+  return configs.map(cfg => nodemailer.createTransport(cfg));
+}
+
+const transporters = buildTransporters();
+
+async function sendMailWithFallback(mailOptions) {
+  if (!transporters.length) throw new Error('Email credentials not configured');
+  let lastErr;
+  for (let i = 0; i < transporters.length; i++) {
+    try {
+      const info = await transporters[i].sendMail(mailOptions);
+      console.log(`📧 Email sent via transporter #${i + 1}`, info?.messageId ? `id=${info.messageId}` : '');
+      return info;
+    } catch (e) {
+      lastErr = e;
+      console.warn(`⚠️  Send attempt #${i + 1} failed:`, e?.code || e?.message || e);
     }
-  });
-} else {
-  console.warn('⚠️  Email credentials not configured - forgot password feature disabled');
+  }
+  throw lastErr || new Error('All email transports failed');
+}
+
+// Derive the frontend base URL without using FRONTEND_URL.
+// Preference order: request Origin header -> first exact entry from FRONTEND_ORIGINS -> localhost
+function getFrontendBase(req) {
+  try {
+    const originHeader = (req.headers?.origin || '').replace(/\/$/, '');
+    if (originHeader) return originHeader;
+
+    const raw = process.env.FRONTEND_ORIGINS || '';
+    const entries = raw.split(',').map(s => s.trim()).filter(Boolean);
+    const exact = entries.find(e => !e.startsWith('*.'));
+    if (exact) return exact.replace(/\/$/, '');
+  } catch (_) { /* ignore */ }
+  return 'http://localhost:3000';
 }
 
 // Simple auth middleware to verify JWT and attach userId
@@ -392,10 +419,9 @@ router.post("/forgot-password", async (req, res) => {
     user.resetPasswordExpire = Date.now() + 3600000; // 1 hour
     await user.save();
 
-    // Create reset URL (prefer configured FRONTEND_URL, fallback to request origin)
-    const origin = (req.headers.origin || '').replace(/\/$/, '');
-    const baseUrl = process.env.FRONTEND_URL || origin || 'http://localhost:3000';
-    const resetUrl = `${baseUrl}/reset-password/${resetToken}`;
+  // Create reset URL from FRONTEND_ORIGINS or request Origin (no FRONTEND_URL usage)
+  const baseUrl = getFrontendBase(req);
+  const resetUrl = `${baseUrl}/reset-password/${resetToken}`;
 
     // Respond immediately so UI isn't blocked by SMTP connectivity
     res.json({ message: "If an account exists with this email, a reset link has been sent" });
@@ -452,7 +478,7 @@ router.post("/forgot-password", async (req, res) => {
           `
         };
 
-        const info = await transporter.sendMail(mailOptions);
+        const info = await sendMailWithFallback(mailOptions);
         console.log(`✅ Password reset email attempted to: ${user.email}`, info?.messageId ? `id=${info.messageId}` : '');
       } catch (emailError) {
         console.warn('⚠️ Password reset email failed:', emailError?.code || emailError?.message || emailError);
@@ -547,8 +573,8 @@ router.post("/reset-password/:token", async (req, res) => {
         `
       };
 
-      await transporter.sendMail(mailOptions);
-      console.log(`Password reset confirmation sent to: ${user.email}`);
+  await sendMailWithFallback(mailOptions);
+  console.log(`Password reset confirmation sent to: ${user.email}`);
     } catch (emailError) {
       console.error('Confirmation email error:', emailError);
       // Don't fail the request if confirmation email fails
