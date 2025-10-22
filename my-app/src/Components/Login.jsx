@@ -19,8 +19,6 @@ function Login({ onAuthSuccess = () => {} }) {
     signup: false,
     confirm: false
   });
-  const [showForgotPassword, setShowForgotPassword] = useState(false);
-  const [resetEmail, setResetEmail] = useState("");
 
   const firstErrorRef = useRef(null);
 
@@ -204,43 +202,6 @@ function Login({ onAuthSuccess = () => {} }) {
     }
   };
 
-  // Handle forgot password
-  const handleForgotPassword = async () => {
-    if (!resetEmail.trim()) {
-      showToast("Please enter your email", { type: "error" });
-      return;
-    }
-
-    if (!/\S+@\S+\.\S+/.test(resetEmail)) {
-      showToast("Please enter a valid email", { type: "error" });
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const res = await fetch(apiUrl("/api/auth/forgot-password"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: resetEmail }),
-      });
-
-      const result = await res.json();
-
-      if (res.ok) {
-        showToast("Password reset link sent to your email!", { type: "success" });
-        setShowForgotPassword(false);
-        setResetEmail("");
-      } else {
-        showToast(result.message || "Failed to send reset link", { type: "error" });
-      }
-    } catch (err) {
-      console.error("Forgot password error:", err);
-      showToast("Failed to send reset link", { type: "error" });
-    } finally {
-      setLoading(false);
-    }
-  };
-
   // Get ref for first error dynamically
   const getRef = (field) => errors[field] ? firstErrorRef : null;
 
@@ -288,18 +249,6 @@ function Login({ onAuthSuccess = () => {} }) {
                 </button>
               </div>
               {errors.password && <span className="error-message">{errors.password}</span>}
-              <div className="forgot-password-link">
-                <button 
-                  type="button" 
-                  onClick={() => {
-                    setShowForgotPassword(true);
-                    setResetEmail(loginData.email);
-                  }}
-                  className="forgot-link-btn"
-                >
-                  Forgot Password?
-                </button>
-              </div>
             </div><br/>
             <button type="submit" className="submit-btn" disabled={loading}>{loading ? "Processing..." : "Sign In"}</button>
             
@@ -450,37 +399,8 @@ function Login({ onAuthSuccess = () => {} }) {
         </div>
       </div>
       </div>
-
-      {/* Forgot Password Modal */}
-      {showForgotPassword && (
-        <div className="forgot-password-overlay" onClick={() => setShowForgotPassword(false)}>
-          <div className="forgot-password-modal" onClick={(e) => e.stopPropagation()}>
-            <button className="modal-close-btn" onClick={() => setShowForgotPassword(false)}>✕</button>
-            <h3>Reset Password</h3>
-            <p>Enter your email address and we'll send you a link to reset your password.</p>
-            <div className="input-group">
-              <label>Email</label>
-              <input 
-                type="email" 
-                placeholder="Enter your email" 
-                value={resetEmail}
-                onChange={(e) => setResetEmail(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleForgotPassword()}
-              />
-            </div>
-            <button 
-              className="submit-btn" 
-              onClick={handleForgotPassword}
-              disabled={loading}
-            >
-              {loading ? "Sending..." : "Send Reset Link"}
-            </button>
-          </div>
-        </div>
-      )}
     </GoogleOAuthProvider>
   );
 }
 
 export default Login;
-

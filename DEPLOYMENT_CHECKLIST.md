@@ -19,10 +19,18 @@ This checklist lets you deploy without running anything locally.
   - MONGO_URI = mongodb+srv://<user>:<pass>@<cluster>/<db>?retryWrites=true&w=majority
   - JWT_SECRET = <strong-secret>
   - FRONTEND_ORIGINS = https://<your-vercel-domain>, *.vercel.app
-  - FRONTEND_URL = https://<your-vercel-domain>
+  - FRONTEND_URL = https://<your-vercel-domain> (not required for reset links; they now use Origin/FRONTEND_ORIGINS)
   - SERVICE_TOKEN = <shared-strong-secret>
   - EMAIL_USER = urmail@gmail.com
   - EMAIL_PASS = pnaq ukmn obli xdew (Gmail App Password - spaces will be auto-removed by code)
+  - GMAIL_API_CLIENT_ID = <oauth-client-id> (optional; Gmail API over HTTPS)
+  - GMAIL_API_CLIENT_SECRET = <oauth-client-secret> (optional)
+  - GMAIL_API_REFRESH_TOKEN = <oauth-refresh-token> (optional)
+  - GMAIL_API_SENDER = SmartDocQ <no-reply@yourdomain.com> (optional; From header for Gmail API)
+  - RESEND_API_KEY = <your-resend-api-key> (optional; enables HTTPS email send to bypass SMTP blocks)
+  - RESEND_FROM = "SmartDocQ <no-reply@yourdomain.com>" (optional; must be verified in Resend)
+  - EXPOSE_RESET_URL = true (optional; include resetUrl in forgot-password response for debugging)
+  - OPS_KEY = <random-ops-secret> (optional; secures /api/auth/_ops/email-test)
   - GOOGLE_CLIENT_ID = <your-google-oauth-client-id>
   - GOOGLE_CLIENT_SECRET = <your-google-oauth-client-secret>
   - CLOUDINARY_CLOUD_NAME = (optional)
@@ -62,6 +70,15 @@ This checklist lets you deploy without running anything locally.
 - CORS errors: ensure FRONTEND_ORIGINS includes your exact Vercel URL or wildcard .vercel.app.
 - 401/403 from Flask doc download: SERVICE_TOKEN must match on Node and Flask.
 - Conversion failures: confirm FLASK_CONVERT_URL set and docx2pdf is available; otherwise Word files are stored as-is.
+- Password reset email not received:
+  - Ensure Gmail account has 2FA and you use an App Password for EMAIL_PASS.
+  - Some hosts block SMTP egress. The API responds immediately, but emails may fail silently; check server logs.
+  - Startup now verifies SMTP transporters and logs any verify/connectivity errors.
+  - Temporarily set `EXPOSE_RESET_URL=true` to get `debug.resetUrl` in the forgot-password response.
+  - Use the secured ops endpoint to test SMTP:
+    - GET https://<your-node-api-domain>/api/auth/_ops/email-test?to=you@example.com
+    - Header: `x-ops-key: <OPS_KEY>` (required in production)
+  - Alternatively, set `RESEND_API_KEY` (and a valid `RESEND_FROM`) to send mail over HTTPS, which works on hosts that block SMTP.
 
 ### Render-specific (persistent ChromaDB)
 - Add a Persistent Disk to the Flask service (e.g., size 1–5 GB) and mount it at `/var/data`.

@@ -7,7 +7,6 @@ import Footer from './Components/Footer';
 import Upload from './Components/UploadPage';
 import RequireAuth from './Components/RequireAuth';
 import Login from './Components/Login';
-import ResetPassword from './Components/ResetPassword';
 import AdminRoute from './Components/Admin/AdminRoute';
 import { ToastProvider } from './Components/ToastContext';
 import "./App.css";
@@ -60,11 +59,6 @@ function Main() {
             <Footer />
           </>
         }
-      />
-      
-      <Route 
-        path="/reset-password/:token"
-        element={<ResetPassword />}
       />
       
       <Route 
