@@ -11,6 +11,8 @@ const userSchema = new mongoose.Schema({
   lastPasswordChange: { type: Date, default: null },
   passwordChangeCount: { type: Number, default: 0 },
   passwordChangeWindowStart: { type: Date, default: null },
+  resetPasswordToken: { type: String }, // Hashed token for password reset
+  resetPasswordExpire: { type: Date }, // Token expiration time
   isAdmin: { type: Boolean, default: false },
   isActive: { type: Boolean, default: true },
   role: { type: String, enum: ["user", "admin", "moderator"], default: "user" }

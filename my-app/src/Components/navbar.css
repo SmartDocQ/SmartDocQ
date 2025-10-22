@@ -139,10 +139,6 @@
   color: #000 !important;
 }
 
-.close-btn:hover {
-  background: rgba(0, 0, 0, 0.08) !important;
-}
-
 .avatar{
   width: 36px;
   height: 36px;

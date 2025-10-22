@@ -2,6 +2,8 @@ const express = require("express");
 const router = express.Router();
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
+const nodemailer = require("nodemailer");
 const User = require("../models/User");
 const multer = require("multer");
 const path = require("path");
@@ -11,6 +13,24 @@ const Chat = require("../models/Chat");
 const Document = require("../models/Document");
 const ContactReport = require("../models/ContactReport");
 const { OAuth2Client } = require('google-auth-library');
+
+// Configure email transporter
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  }
+});
+
+// Verify email configuration on startup
+transporter.verify(function(error, success) {
+  if (error) {
+    console.error('❌ Email configuration error:', error.message);
+  } else {
+    console.log('✅ Email server is ready to send messages');
+  }
+});
 
 // Simple auth middleware to verify JWT and attach userId
 function verifyToken(req, res, next) {
@@ -335,6 +355,213 @@ router.post("/me/avatar", verifyToken, avatarUpload.single("avatar"), async (req
     return res.status(500).json({ message: err.message || "Failed to upload avatar" });
   }
 });
+
+// ===== FORGOT PASSWORD & RESET =====
+// Request password reset (generates token and stores in DB)
+router.post("/forgot-password", async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email || !email.trim()) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
+    
+    // For security, always return success even if user doesn't exist
+    if (!user) {
+      return res.json({ message: "If an account exists with this email, a reset link will be sent" });
+    }
+
+    // Check if user signed up with Google (no password to reset)
+    if (user.authProvider === 'google' && !user.password) {
+      return res.status(400).json({ message: "This account uses Google Sign-In. Please sign in with Google." });
+    }
+
+    // Generate reset token (valid for 1 hour)
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
+    
+    user.resetPasswordToken = resetTokenHash;
+    user.resetPasswordExpire = Date.now() + 3600000; // 1 hour
+    await user.save();
+
+    // Create reset URL
+    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password/${resetToken}`;
+
+    // Send email
+    try {
+      const mailOptions = {
+        from: `"SmartDoc" <${process.env.EMAIL_USER}>`,
+        to: user.email,
+        subject: 'Password Reset Request - SmartDoc',
+        html: `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+              .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+              .button { display: inline-block; padding: 14px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; }
+              .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #666; }
+              .warning { background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin: 20px 0; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>🔐 Password Reset Request</h1>
+              </div>
+              <div class="content">
+                <p>Hello <strong>${user.name}</strong>,</p>
+                <p>You requested to reset your password for your SmartDoc account. Click the button below to reset it:</p>
+                <div style="text-align: center;">
+                  <a href="${resetUrl}" class="button">Reset Password</a>
+                </div>
+                <p>Or copy and paste this link into your browser:</p>
+                <p style="background: white; padding: 12px; border-radius: 6px; word-break: break-all; font-size: 12px; color: #667eea;">
+                  ${resetUrl}
+                </p>
+                <div class="warning">
+                  <strong>⚠️ Important:</strong> This link will expire in <strong>1 hour</strong>.
+                </div>
+                <p>If you didn't request this password reset, please ignore this email. Your password will remain unchanged.</p>
+                <p>Best regards,<br><strong>SmartDoc Team</strong></p>
+              </div>
+              <div class="footer">
+                <p>This is an automated message, please do not reply to this email.</p>
+                <p>&copy; 2025 SmartDoc. All rights reserved.</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `
+      };
+
+      await transporter.sendMail(mailOptions);
+      console.log(`Password reset email sent to: ${user.email}`);
+
+      res.json({ 
+        message: "Password reset link sent to your email"
+      });
+
+    } catch (emailError) {
+      console.error('Email sending error:', emailError);
+      
+      // Rollback - clear the token if email fails
+      user.resetPasswordToken = undefined;
+      user.resetPasswordExpire = undefined;
+      await user.save();
+      
+      return res.status(500).json({ 
+        message: "Failed to send reset email. Please try again later." 
+      });
+    }
+
+  } catch (err) {
+    console.error('Forgot password error:', err);
+    return res.status(500).json({ message: "Failed to process password reset request" });
+  }
+});
+
+// Reset password (using token from email)
+router.post("/reset-password/:token", async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { password } = req.body;
+
+    if (!password || password.length < 6) {
+      return res.status(400).json({ message: "Password must be at least 6 characters" });
+    }
+
+    // Hash the token to compare with DB
+    const resetTokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+    // Find user with valid token that hasn't expired
+    const user = await User.findOne({
+      resetPasswordToken: resetTokenHash,
+      resetPasswordExpire: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: "Invalid or expired reset token" });
+    }
+
+    // Update password
+    user.password = await bcrypt.hash(password, 10);
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
+    await user.save();
+
+    // Send confirmation email
+    try {
+      const mailOptions = {
+        from: `"SmartDoc" <${process.env.EMAIL_USER}>`,
+        to: user.email,
+        subject: 'Password Reset Successful - SmartDoc',
+        html: `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background: linear-gradient(135deg, #00c851 0%, #007e33 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+              .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+              .success-badge { background: #d4edda; border-left: 4px solid #28a745; padding: 12px; margin: 20px 0; border-radius: 4px; }
+              .warning { background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin: 20px 0; }
+              .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #666; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>✅ Password Reset Successful</h1>
+              </div>
+              <div class="content">
+                <p>Hello <strong>${user.name}</strong>,</p>
+                <div class="success-badge">
+                  <strong>✓ Success!</strong> Your password has been successfully reset.
+                </div>
+                <p>You can now log in to your SmartDoc account using your new password.</p>
+                <p><strong>Reset Details:</strong></p>
+                <ul>
+                  <li>Time: ${new Date().toLocaleString()}</li>
+                  <li>Account: ${user.email}</li>
+                </ul>
+                <div class="warning">
+                  <strong>⚠️ Didn't make this change?</strong><br>
+                  If you didn't reset your password, please contact our support team immediately.
+                </div>
+                <p>Best regards,<br><strong>SmartDoc Team</strong></p>
+              </div>
+              <div class="footer">
+                <p>This is an automated message, please do not reply to this email.</p>
+                <p>&copy; 2025 SmartDoc. All rights reserved.</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `
+      };
+
+      await transporter.sendMail(mailOptions);
+      console.log(`Password reset confirmation sent to: ${user.email}`);
+    } catch (emailError) {
+      console.error('Confirmation email error:', emailError);
+      // Don't fail the request if confirmation email fails
+    }
+
+    res.json({ message: "Password reset successful. You can now log in with your new password." });
+
+  } catch (err) {
+    console.error('Reset password error:', err);
+    return res.status(500).json({ message: "Failed to reset password" });
+  }
+});
+
 // ===== GOOGLE OAUTH =====
 // Initialize Google OAuth client
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);

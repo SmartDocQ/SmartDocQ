@@ -19,7 +19,12 @@ This checklist lets you deploy without running anything locally.
   - MONGO_URI = mongodb+srv://<user>:<pass>@<cluster>/<db>?retryWrites=true&w=majority
   - JWT_SECRET = <strong-secret>
   - FRONTEND_ORIGINS = https://<your-vercel-domain>, *.vercel.app
+  - FRONTEND_URL = https://<your-vercel-domain>
   - SERVICE_TOKEN = <shared-strong-secret>
+  - EMAIL_USER = smartdocq@gmail.com
+  - EMAIL_PASS = pnaq ukmn obli xdew
+  - GOOGLE_CLIENT_ID = <your-google-oauth-client-id>
+  - GOOGLE_CLIENT_SECRET = <your-google-oauth-client-secret>
   - CLOUDINARY_CLOUD_NAME = (optional)
   - CLOUDINARY_API_KEY = (optional)
   - CLOUDINARY_API_SECRET = (optional)
