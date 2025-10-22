@@ -203,6 +203,35 @@ router.get("/dashboard", verifyToken, isAdmin, async (req, res) => {
       memoryUsage: Math.floor(Math.random() * 50) + 30, // 30-80%
       diskUsage: Math.floor(Math.random() * 40) + 20 // 20-60%
     };
+
+    // ===== Weekly growth metrics (last 7 days by weekday) =====
+    const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const dayFromIso = (iso) => DAYS[(Math.max(1, Math.min(7, Number(iso))) - 1)]; // 1..7 => Mon..Sun
+    const start7d = new Date();
+    start7d.setDate(start7d.getDate() - 6);
+    start7d.setHours(0, 0, 0, 0);
+
+    const [userAgg, reportAgg] = await Promise.all([
+      User.aggregate([
+        { $match: { createdAt: { $gte: start7d } } },
+        { $group: { _id: { $isoDayOfWeek: "$createdAt" }, count: { $sum: 1 } } }
+      ]).catch(() => []),
+      ContactReport.aggregate([
+        { $match: { createdAt: { $gte: start7d } } },
+        { $group: { _id: { $isoDayOfWeek: "$createdAt" }, count: { $sum: 1 } } }
+      ]).catch(() => [])
+    ]);
+
+    const weeklyUserGrowth = DAYS.reduce((acc, d) => (acc[d] = 0, acc), {});
+    const weeklyReportGrowth = DAYS.reduce((acc, d) => (acc[d] = 0, acc), {});
+    userAgg.forEach(row => {
+      const day = dayFromIso(row?._id);
+      if (day) weeklyUserGrowth[day] = row.count || 0;
+    });
+    reportAgg.forEach(row => {
+      const day = dayFromIso(row?._id);
+      if (day) weeklyReportGrowth[day] = row.count || 0;
+    });
     
     const stats = {
       totalUsers,
@@ -223,6 +252,9 @@ router.get("/dashboard", verifyToken, isAdmin, async (req, res) => {
       recentActivities,
       systemHealth
     };
+    // Attach weekly growth maps
+    stats.weeklyUserGrowth = weeklyUserGrowth;
+    stats.weeklyReportGrowth = weeklyReportGrowth;
     
     res.json({ stats });
   } catch (error) {
