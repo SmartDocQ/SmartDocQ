@@ -1,4 +1,8 @@
 import React, { useState, useEffect } from "react";
+// Integrate with GSAP ScrollTrigger to avoid getting stuck on pinned sections
+import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { gsap } from "gsap";
+gsap.registerPlugin(ScrollTrigger);
 import "./Top.css";
 
 export default function Top() {
@@ -13,7 +17,21 @@ export default function Top() {
   }, []);
 
   const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    try {
+      // Temporarily disable pinned ScrollTriggers (e.g., Features horizontal section)
+      const pins = ScrollTrigger.getAll().filter(st => !!st.pin);
+      pins.forEach(st => st.disable());
+      // Jump to the top (auto avoids conflicts with pinned scrub)
+      window.scrollTo({ top: 0, behavior: "auto" });
+      // Re-enable after a tick and refresh measurements
+      setTimeout(() => {
+        pins.forEach(st => st.enable());
+        ScrollTrigger.refresh();
+      }, 40);
+    } catch (_) {
+      // Fallback
+      window.scrollTo({ top: 0, behavior: "auto" });
+    }
   };
 
   return (
