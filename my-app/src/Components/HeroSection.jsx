@@ -140,8 +140,7 @@ const HeroSection = () => {
   {
     title: "Multi-Format & Web Support",
     desc: "SmartDocQ adapts to your workflow by supporting multiple file types — PDF, DOCX, TXT, and web pages — ensuring flexibility for any use case or document source.",
-    anim: f7,
-    size: 210
+    anim: f7
   },
   {
     title: "Advanced Security & Protection",
@@ -193,13 +192,7 @@ const HeroSection = () => {
           {features.map((f) => (
             <div className="box" key={f.title}>
               <div className="glass">
-                {isMounted && (
-                  <Lottie
-                    animationData={f.anim}
-                    loop
-                    style={{ height: f.size || 150, width: f.size || 150, margin: "0 auto" }}
-                  />
-                )}
+                {isMounted && <Lottie animationData={f.anim} loop style={{ height: 150, width: 150, margin: "0 auto" }} />}
                 <div className="content">
                   <h2>{f.title}</h2>
                   <p>{f.desc}</p>
