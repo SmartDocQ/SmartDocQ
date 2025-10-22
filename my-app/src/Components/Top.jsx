@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
+import "./Top.css";
 // Integrate with GSAP ScrollTrigger to avoid getting stuck on pinned sections
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { gsap } from "gsap";
 gsap.registerPlugin(ScrollTrigger);
-import "./Top.css";
 
 export default function Top() {
   const [visible, setVisible] = useState(false);
