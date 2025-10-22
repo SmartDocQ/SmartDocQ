@@ -205,6 +205,18 @@ const UploadPage = () => {
     });
   };
 
+  // Remove an individual file from the current selection
+  const removeSelectedFile = (targetKey) => {
+    setFiles((prev) => {
+      const next = prev.filter((f) => `${f.name}|${f.size}|${f.lastModified}` !== targetKey);
+      // If the primary file is removed, reassign or clear
+      if (file && `${file.name}|${file.size}|${file.lastModified}` === targetKey) {
+        if (next.length) setFile(next[0]); else setFile(null);
+      }
+      return next;
+    });
+  };
+
   // --- UPDATED UPLOAD HANDLER ---
   const handleUpload = async () => {
   const selected = files.length ? files : (file ? [file] : []);
@@ -651,22 +663,30 @@ const sendMessage = async () => {
 
               {/* Selected files summary */}
               {files.length > 0 && (
-                <div className="file-info-simple">
-                  {files.length === 1 ? (
-                    <>
-                      <span className="file-name">{sanitizeFilename(files[0].name)}</span>
-                      <span className="file-size">{formatBytes(files[0].size)}</span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="file-name">{files.length} files selected</span>
-                      <span className="file-size">
-                        {formatBytes(files.reduce((s,f)=>s+f.size,0))}
-                      </span>
-                    </>
-                  )}
-                  <button type="button" className="remove-file" aria-label="Remove selected file(s)" onClick={clearSelectedFiles}>×</button>
-                </div>
+                files.length === 1 ? (
+                  <div className="file-info-simple">
+                    <span className="file-name">{sanitizeFilename(files[0].name)}</span>
+                    <span className="file-size">{formatBytes(files[0].size)}</span>
+                    <button type="button" className="remove-file" aria-label="Remove selected file" onClick={clearSelectedFiles}>×</button>
+                  </div>
+                ) : (
+                  <div className="file-list">
+                    {files.map((f) => {
+                      const key = `${f.name}|${f.size}|${f.lastModified}`;
+                      return (
+                        <div className="file-chip" key={key} title={f.name}>
+                          <span className="chip-name">{sanitizeFilename(f.name)}</span>
+                          <span className="chip-size">{formatBytes(f.size)}</span>
+                          <button type="button" className="chip-remove" aria-label={`Remove ${f.name}`} onClick={() => removeSelectedFile(key)}>×</button>
+                        </div>
+                      );
+                    })}
+                    <div className="file-summary">
+                      {files.length} files • {formatBytes(files.reduce((s,f)=>s+f.size,0))}
+                      <button type="button" className="file-summary-clear" onClick={clearSelectedFiles} aria-label="Clear all files">Clear all</button>
+                    </div>
+                  </div>
+                )
               )}
 
               <div className="upload-actions">

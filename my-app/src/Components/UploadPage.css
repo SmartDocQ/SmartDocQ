@@ -247,3 +247,76 @@
 
 /* Extra space above restrictions just in case */
 .file-restrictions { margin-top: 4px; }
+
+/* Multiple files view */
+.file-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin: 12px 0;
+}
+
+.file-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 999px;
+}
+
+.chip-name {
+  max-width: 160px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: #cbd5e1;
+  font-weight: 600;
+}
+
+.chip-size {
+  color: #8892a6;
+  font-size: 0.8rem;
+  background: #1a1a1a;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.chip-remove {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid #444;
+  background: #161616;
+  color: #cbd5e1;
+  cursor: pointer;
+  line-height: 16px;
+  text-align: center;
+  font-size: 14px;
+}
+.chip-remove:hover { background: #1f1f1f; border-color: #666; }
+
+.file-summary {
+  width: 100%;
+  text-align: center;
+  color: #94a3b8;
+  margin-top: 4px;
+  font-size: 0.9rem;
+}
+
+.file-summary-clear {
+  margin-left: 8px;
+  background: transparent;
+  border: 1px solid #444;
+  color: #cbd5e1;
+  padding: 2px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.file-summary-clear:hover { background: #1a1a1a; }
