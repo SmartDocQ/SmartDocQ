@@ -194,6 +194,17 @@ const UploadPage = () => {
     });
   };
 
+  // Clear currently selected local files (before upload)
+  const clearSelectedFiles = () => {
+    setFiles([]);
+    setFile(null);
+    setUploaded(false);
+    setFileUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return "";
+    });
+  };
+
   // --- UPDATED UPLOAD HANDLER ---
   const handleUpload = async () => {
   const selected = files.length ? files : (file ? [file] : []);
@@ -654,6 +665,7 @@ const sendMessage = async () => {
                       </span>
                     </>
                   )}
+                  <button type="button" className="remove-file" aria-label="Remove selected file(s)" onClick={clearSelectedFiles}>×</button>
                 </div>
               )}
 

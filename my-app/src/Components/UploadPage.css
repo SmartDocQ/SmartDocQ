@@ -23,6 +23,7 @@
   font-size: 2.5rem;
   margin-bottom: 10px;
   background: linear-gradient(120deg, #8b5cf6, #3b82f6);
+  background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   font-weight: 700;
@@ -132,6 +133,7 @@
 
 .upload-actions {
   margin-top: 15px;
+  margin-bottom: 16px; /* add space above file restrictions text */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -204,6 +206,7 @@
   background: #111;
   border-radius: 8px;
   border: 1px solid #222;
+  position: relative; /* to position remove button */
 }
 
 .file-name {
@@ -223,3 +226,24 @@
   padding: 2px 8px;
   border-radius: 12px;
 }
+
+/* Remove selected file button */
+.remove-file {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid #444;
+  background: #161616;
+  color: #cbd5e1;
+  cursor: pointer;
+  line-height: 18px;
+  text-align: center;
+  font-size: 16px;
+}
+.remove-file:hover { background: #1f1f1f; border-color: #666; }
+
+/* Extra space above restrictions just in case */
+.file-restrictions { margin-top: 4px; }
