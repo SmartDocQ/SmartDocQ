@@ -73,7 +73,7 @@
   backdrop-filter: blur(6px);
   scroll-margin-top: 90px; /* keep anchored sections visible below sticky nav */
 }
-.hc-section:last-of-type { margin-bottom: 0; } /* ensure last card doesn't add space above footer */
+.hc-section:last-of-type { margin-bottom: 12px; } /* slight breathing room above footer */
 .hc-title {
   font-size: 1.25rem;
   margin-bottom: 10px;
