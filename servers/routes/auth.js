@@ -392,84 +392,73 @@ router.post("/forgot-password", async (req, res) => {
     user.resetPasswordExpire = Date.now() + 3600000; // 1 hour
     await user.save();
 
-    // Create reset URL
-    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password/${resetToken}`;
+    // Create reset URL (prefer configured FRONTEND_URL, fallback to request origin)
+    const origin = (req.headers.origin || '').replace(/\/$/, '');
+    const baseUrl = process.env.FRONTEND_URL || origin || 'http://localhost:3000';
+    const resetUrl = `${baseUrl}/reset-password/${resetToken}`;
 
-    // Send email
-    try {
-      const mailOptions = {
-        from: `"SmartDocQ" <${process.env.EMAIL_USER}>`,
-        to: user.email,
-        subject: 'Password Reset Request - SmartDocQ',
-        html: `
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <style>
-              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-              .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-              .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-              .button { display: inline-block; padding: 14px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; }
-              .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #666; }
-              .warning { background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin: 20px 0; }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <div class="header">
-                <h1>🔐 Password Reset Request</h1>
-              </div>
-              <div class="content">
-                <p>Hello <strong>${user.name}</strong>,</p>
-                <p>You requested to reset your password for your SmartDoc account. Click the button below to reset it:</p>
-                <div style="text-align: center;">
-                  <a href="${resetUrl}" class="button">Reset Password</a>
+    // Respond immediately so UI isn't blocked by SMTP connectivity
+    res.json({ message: "If an account exists with this email, a reset link has been sent" });
+
+    // Fire-and-forget email send (won't block HTTP response)
+    setImmediate(async () => {
+      try {
+        const mailOptions = {
+          from: `"SmartDocQ" <${process.env.EMAIL_USER}>`,
+          to: user.email,
+          subject: 'Password Reset Request - SmartDocQ',
+          html: `
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <style>
+                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+                .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+                .button { display: inline-block; padding: 14px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; }
+                .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #666; }
+                .warning { background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin: 20px 0; }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <div class="header">
+                  <h1>🔐 Password Reset Request</h1>
                 </div>
-                <p>Or copy and paste this link into your browser:</p>
-                <p style="background: white; padding: 12px; border-radius: 6px; word-break: break-all; font-size: 12px; color: #667eea;">
-                  ${resetUrl}
-                </p>
-                <div class="warning">
-                  <strong>⚠️ Important:</strong> This link will expire in <strong>1 hour</strong>.
+                <div class="content">
+                  <p>Hello <strong>${user.name}</strong>,</p>
+                  <p>You requested to reset your password for your SmartDoc account. Click the button below to reset it:</p>
+                  <div style="text-align: center;">
+                    <a href="${resetUrl}" class="button">Reset Password</a>
+                  </div>
+                  <p>Or copy and paste this link into your browser:</p>
+                  <p style="background: white; padding: 12px; border-radius: 6px; word-break: break-all; font-size: 12px; color: #667eea;">
+                    ${resetUrl}
+                  </p>
+                  <div class="warning">
+                    <strong>⚠️ Important:</strong> This link will expire in <strong>1 hour</strong>.
+                  </div>
+                  <p>If you didn't request this password reset, please ignore this email. Your password will remain unchanged.</p>
+                  <p>Best regards,<br><strong>SmartDoc Team</strong></p>
                 </div>
-                <p>If you didn't request this password reset, please ignore this email. Your password will remain unchanged.</p>
-                <p>Best regards,<br><strong>SmartDoc Team</strong></p>
+                <div class="footer">
+                  <p>This is an automated message, please do not reply to this email.</p>
+                  <p>&copy; 2025 SmartDoc. All rights reserved.</p>
+                </div>
               </div>
-              <div class="footer">
-                <p>This is an automated message, please do not reply to this email.</p>
-                <p>&copy; 2025 SmartDoc. All rights reserved.</p>
-              </div>
-            </div>
-          </body>
-          </html>
-        `
-      };
+            </body>
+            </html>
+          `
+        };
 
-      await transporter.sendMail(mailOptions);
-      console.log(`✅ Password reset email sent successfully to: ${user.email}`);
-
-      res.json({ 
-        message: "Password reset link sent to your email"
-      });
-
-    } catch (emailError) {
-      console.error('❌ Email sending error:', emailError);
-      console.error('Error details:', {
-        code: emailError.code,
-        command: emailError.command,
-        response: emailError.response
-      });
-      
-      // Rollback - clear the token if email fails
-      user.resetPasswordToken = undefined;
-      user.resetPasswordExpire = undefined;
-      await user.save();
-      
-      return res.status(500).json({ 
-        message: "Failed to send reset email. Please try again later." 
-      });
-    }
+        const info = await transporter.sendMail(mailOptions);
+        console.log(`✅ Password reset email attempted to: ${user.email}`, info?.messageId ? `id=${info.messageId}` : '');
+      } catch (emailError) {
+        console.warn('⚠️ Password reset email failed:', emailError?.code || emailError?.message || emailError);
+      }
+    });
+    return; // ensure we don't continue in this handler after responding
 
   } catch (err) {
     console.error('Forgot password error:', err);
