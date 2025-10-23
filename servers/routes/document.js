@@ -5,8 +5,31 @@ const Document = require("../models/Document");
 const { verifyToken, ensureActive } = require("./auth");
 const fetch = require("node-fetch");
 
-const FLASK_INDEX_URL = process.env.FLASK_INDEX_URL || "http://localhost:5001/api/index-from-atlas";
-const FLASK_REPLACE_TEXT_URL = process.env.FLASK_REPLACE_TEXT_URL || "http://localhost:5001/api/index/replace-text";
+// Centralize Flask/Python backend base URL for deployments
+function deriveBaseFrom(urlStr) {
+  try {
+    const u = new URL(urlStr);
+    return u.origin; // e.g., https://smartdocq-flask-xxxx.run.app
+  } catch (_) {
+    // Try a simple prefix up to /api/
+    if (typeof urlStr === 'string') {
+      const i = urlStr.indexOf('/api/');
+      if (i > 0) return urlStr.slice(0, i);
+    }
+    return null;
+  }
+}
+
+let FLASK_BASE = (process.env.FLASK_BASE_URL || process.env.PY_API_URL || process.env.PY_API_BASE || process.env.FLASK_URL || "").replace(/\/$/, "");
+if (!FLASK_BASE && process.env.FLASK_INDEX_URL) {
+  const derived = deriveBaseFrom(process.env.FLASK_INDEX_URL);
+  if (derived) FLASK_BASE = derived.replace(/\/$/, "");
+}
+if (!FLASK_BASE) FLASK_BASE = "http://localhost:5001"; // dev fallback only
+
+const FLASK_INDEX_URL = process.env.FLASK_INDEX_URL || `${FLASK_BASE}/api/index-from-atlas`;
+const FLASK_REPLACE_TEXT_URL = process.env.FLASK_REPLACE_TEXT_URL || `${FLASK_BASE}/api/index/replace-text`;
+const FLASK_CONVERT_URL = process.env.FLASK_CONVERT_URL || `${FLASK_BASE}/api/convert/word-to-pdf`;
 
 const storage = multer.memoryStorage();
 const upload = multer({
@@ -43,15 +66,13 @@ router.post("/upload", verifyToken, ensureActive, upload.single("file"), async (
     if (isWordDocument) {
       try {
         // Convert Word to PDF using Flask backend
-        const flaskConvertUrl = process.env.FLASK_CONVERT_URL || "http://localhost:5001/api/convert/word-to-pdf";
-        
         const formData = new (require('form-data'))();
         formData.append('file', buffer, {
           filename: originalname,
           contentType: mimetype
         });
         
-        const convertResponse = await fetch(flaskConvertUrl, {
+        const convertResponse = await fetch(FLASK_CONVERT_URL, {
           method: 'POST',
           body: formData,
           headers: formData.getHeaders()
@@ -118,15 +139,13 @@ router.post("/upload/batch", verifyToken, ensureActive, upload.array("files", 10
       if (isWordDocument) {
         try {
           // Convert Word to PDF using Flask backend
-          const flaskConvertUrl = process.env.FLASK_CONVERT_URL || "http://localhost:5001/api/convert/word-to-pdf";
-          
           const formData = new FormData();
           formData.append('file', f.buffer, {
             filename: f.originalname,
             contentType: f.mimetype
           });
           
-          const convertResponse = await fetch(flaskConvertUrl, {
+          const convertResponse = await fetch(FLASK_CONVERT_URL, {
             method: 'POST',
             body: formData,
             headers: formData.getHeaders()
@@ -427,6 +446,10 @@ router.patch("/:id/text", verifyToken, ensureActive, async (req, res) => {
 
     return res.json({ message: payload?.message || "Reindexed", doc_id: doc.doc_id, requireConfirmation: !!payload?.requireConfirmation, sensitiveSummary: payload?.sensitiveSummary || null });
   } catch (err) {
-    return res.status(500).json({ message: err.message });
+    const msg = err?.message || "Upstream request failed";
+    const hint = (process.env.NODE_ENV === 'production' && /localhost:5001/.test(msg))
+      ? "Misconfigured Flask URL in production. Set FLASK_BASE_URL to your deployed Python backend."
+      : undefined;
+    return res.status(502).json({ message: msg, hint, target: FLASK_REPLACE_TEXT_URL });
   }
 });
