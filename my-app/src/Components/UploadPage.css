@@ -317,7 +317,7 @@
   margin-left: 8px;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 0;
   padding: 8px 14px;
   height: 34px;
   background: rgba(139, 92, 246, 0.08);
@@ -344,18 +344,4 @@
 .file-summary-clear:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.25);
-}
-.file-summary-clear::before {
-  content: "×";
-  display: inline-block;
-  width: 16px;
-  height: 16px;
-  line-height: 14px;
-  text-align: center;
-  font-size: 14px;
-  font-weight: 800;
-  color: #e7e9ee;
-  background: #1a1a1a;
-  border: 1px solid #444;
-  border-radius: 4px;
 }

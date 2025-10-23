@@ -6,11 +6,12 @@ const Footer = () => {
   const location = useLocation();
   const isUploadPage = location.pathname === "/upload";
   const isHelpPage = location.pathname === "/help";
+  const isPrivacyPage = location.pathname === "/privacy";
 
   const year = new Date().getFullYear();
 
   return (
-    <footer className={`footer ${isUploadPage ? 'upload-footer' : ''} ${isHelpPage ? 'footer--flush' : ''}`} role="contentinfo">
+  <footer className={`footer ${isUploadPage ? 'upload-footer' : ''} ${(isHelpPage || isPrivacyPage) ? 'footer--flush' : ''}`} role="contentinfo">
       <div className="footer-container">
         <div className="footer-main" aria-label="Footer navigation">
           <section className="footer-section company-info">
