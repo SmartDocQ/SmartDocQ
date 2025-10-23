@@ -79,14 +79,15 @@ def generate_quiz():
         "    }\n"
         "  ]\n"
         "}\n"
-        "- Ensure there are exactly the requested number of questions.\n"
+        "- Generate UP TO the requested number of questions.\n"
+        "- If the document supports fewer questions, return as many as possible without fabricating facts.\n"
         "- Ensure all questions are answerable using the context.\n"
         "- For mcq, include 3-5 plausible options.\n"
         "- For true_false, use the strings 'true' or 'false'.\n"
         "- Keep explanations concise and factual.\n"
     )
     user_instr = (
-        f"Difficulty: {difficulty}. Number of questions: {num_questions}. Allowed types: {', '.join(qtypes)}.\n\n"
+        f"Difficulty: {difficulty}. Number of questions: up to {num_questions}. Allowed types: {', '.join(qtypes)}.\n\n"
         "Document Context:\n" + context[:12000]
     )
 
@@ -222,6 +223,13 @@ def generate_quiz():
         if not qs:
             return jsonify({"success": False, "error": "No valid questions could be constructed from the model output."}), 502
 
-        return jsonify({"success": True, "quiz": {"questions": qs}})
+        # Include metadata so the frontend can reflect counts when fewer than requested
+        meta = {
+            "requested": num_questions,
+            "generated": len(qs),
+            "difficulty": difficulty,
+            "types": qtypes,
+        }
+        return jsonify({"success": True, "quiz": {"questions": qs, "meta": meta}})
     except Exception as e:
         return jsonify({"success": False, "error": f"Quiz generation failed: {e}"}), 500
