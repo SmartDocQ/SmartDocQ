@@ -11,6 +11,7 @@ import AdminRoute from './Components/Admin/AdminRoute';
 import { ToastProvider } from './Components/ToastContext';
 import "./App.css";
 import HelpCenter from './Components/HelpCenter';
+import PrivacyPolicy from './Components/PrivacyPolicy';
 
 function App() {
   return (                                      
@@ -68,6 +69,16 @@ function Main() {
           <>
             <Navbar />
             <HelpCenter />
+            <Footer />
+          </>
+        }
+      />
+      <Route
+        path="/privacy"
+        element={
+          <>
+            <Navbar />
+            <PrivacyPolicy />
             <Footer />
           </>
         }

@@ -56,7 +56,7 @@ const Footer = () => {
               <p>&copy; {year} SmartDocQ. All rights reserved.</p>
             </div>
             <div className="legal-links">
-              <Link to="/help#privacy">Privacy Policy</Link>
+              <Link to="/privacy">Privacy Policy</Link>
               <Link to="/help#terms">Terms of Service</Link>
             </div>
           </div>

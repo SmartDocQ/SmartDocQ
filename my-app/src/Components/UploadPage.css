@@ -304,7 +304,10 @@
 
 .file-summary {
   width: 100%;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   color: #94a3b8;
   margin-top: 4px;
   font-size: 0.9rem;
@@ -312,11 +315,47 @@
 
 .file-summary-clear {
   margin-left: 8px;
-  background: transparent;
-  border: 1px solid #444;
-  color: #cbd5e1;
-  padding: 2px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  height: 34px;
+  background: rgba(139, 92, 246, 0.08);
+  color: #e7e9ee;
+  border: 1px solid rgba(139, 92, 246, 0.5);
   border-radius: 8px;
   cursor: pointer;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease, color 0.2s ease;
+  backdrop-filter: blur(4px);
 }
-.file-summary-clear:hover { background: #1a1a1a; }
+.file-summary-clear:hover {
+  background: rgba(139, 92, 246, 0.16);
+  border-color: #a855f7;
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(168, 85, 247, 0.15);
+}
+.file-summary-clear:active {
+  transform: translateY(0);
+  background: rgba(139, 92, 246, 0.12);
+}
+.file-summary-clear:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.25);
+}
+.file-summary-clear::before {
+  content: "×";
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  line-height: 14px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 800;
+  color: #e7e9ee;
+  background: #1a1a1a;
+  border: 1px solid #444;
+  border-radius: 4px;
+}

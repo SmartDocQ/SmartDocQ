@@ -1,0 +1,36 @@
+/* Page wrapper with dark gradient */
+.privacy-page {
+  background: linear-gradient(135deg, #0a0a0a 0%, #000 50%, #0f0f0f 100%);
+  padding: 32px 0;
+  color: #e0e0e0;
+}
+
+.privacy-container {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+.privacy-hero { text-align: center; margin-bottom: 20px; }
+.privacy-hero h1 {
+  font-size: 2rem;
+  background: linear-gradient(45deg, #00d4ff, #a855f7);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin: 0 0 6px 0;
+}
+.privacy-hero p { color: #9aa3ad; }
+
+.privacy-section {
+  margin: 18px 0;
+  padding: 16px 18px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.07);
+  background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+  box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+}
+
+.privacy-section h2 { font-size: 1.2rem; margin: 0 0 8px 0; color: #d7dde3; }
+.privacy-section p, .privacy-section li { color: #b8c0c8; }
+.privacy-section ul { margin: 8px 0 0 18px; }
