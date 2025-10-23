@@ -159,7 +159,24 @@ def generate_quiz():
                 quiz = None
 
         if not isinstance(quiz, dict) or "questions" not in quiz or not isinstance(quiz.get("questions"), list):
-            return jsonify({"success": False, "error": "Model did not return valid JSON quiz. Please try again."}), 502
+            # Last-chance fallback: request simple true/false-only quiz
+            try:
+                fallback_sys = (
+                    "Create a minimal quiz strictly based on the provided context. Return ONLY JSON with schema: {\n"
+                    "  \"questions\": [ { \"type\": \"true_false\", \"question\": string, \"correct_answer\": \"true|false\", \"explanation\": string } ]\n"
+                    "}\n"
+                    "- Use direct facts from the context; do not invent.\n"
+                    "- Generate UP TO the requested number of questions.\n"
+                )
+                fallback_user = (
+                    f"Number of questions: up to {num_questions}. Only true_false type is allowed.\n\n"
+                    "Document Context:\n" + context[:10000]
+                )
+                resp_f = model.generate_content([fallback_sys, fallback_user], request_options={"timeout": 25})
+                raw_f = (getattr(resp_f, "text", "") or "").strip()
+                quiz = _parse_json_safely(raw_f) or {}
+            except Exception:
+                quiz = {}
 
         # Basic sanitize and trim
         qs = []
@@ -219,6 +236,40 @@ def generate_quiz():
                     continue
 
             qs.append(item)
+
+        if not qs:
+            # Final fallback: ask again for true/false-only
+            try:
+                fallback_sys = (
+                    "Create a minimal quiz strictly based on the provided context. Return ONLY JSON with schema: {\n"
+                    "  \"questions\": [ { \"type\": \"true_false\", \"question\": string, \"correct_answer\": \"true|false\", \"explanation\": string } ]\n"
+                    "}\n"
+                    "- Use direct facts from the context; do not invent.\n"
+                    "- Generate UP TO the requested number of questions.\n"
+                )
+                fallback_user = (
+                    f"Number of questions: up to {num_questions}. Only true_false type is allowed.\n\n"
+                    "Document Context:\n" + context[:10000]
+                )
+                resp_f = model.generate_content([fallback_sys, fallback_user], request_options={"timeout": 25})
+                raw_f = (getattr(resp_f, "text", "") or "").strip()
+                quiz_f = _parse_json_safely(raw_f)
+                if isinstance(quiz_f, dict) and isinstance(quiz_f.get("questions"), list):
+                    for q in quiz_f.get("questions", [])[: num_questions]:
+                        if not isinstance(q, dict):
+                            continue
+                        question = str(q.get("question", "")).strip()
+                        correct = str(q.get("correct_answer", "")).strip().lower()
+                        if not question or correct not in ("true", "false"):
+                            continue
+                        qs.append({
+                            "type": "true_false",
+                            "question": question,
+                            "correct_answer": correct,
+                            "explanation": str(q.get("explanation", "")).strip(),
+                        })
+            except Exception:
+                pass
 
         if not qs:
             return jsonify({"success": False, "error": "No valid questions could be constructed from the model output."}), 502
