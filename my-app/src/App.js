@@ -12,6 +12,7 @@ import { ToastProvider } from './Components/ToastContext';
 import "./App.css";
 import HelpCenter from './Components/HelpCenter';
 import PrivacyPolicy from './Components/PrivacyPolicy';
+import TermsOfService from './Components/TermsOfService';
 
 function App() {
   return (                                      
@@ -79,6 +80,16 @@ function Main() {
           <>
             <Navbar />
             <PrivacyPolicy />
+            <Footer />
+          </>
+        }
+      />
+      <Route
+        path="/terms"
+        element={
+          <>
+            <Navbar />
+            <TermsOfService />
             <Footer />
           </>
         }

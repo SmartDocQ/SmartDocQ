@@ -7,11 +7,12 @@ const Footer = () => {
   const isUploadPage = location.pathname === "/upload";
   const isHelpPage = location.pathname === "/help";
   const isPrivacyPage = location.pathname === "/privacy";
+  const isTermsPage = location.pathname === "/terms";
 
   const year = new Date().getFullYear();
 
   return (
-  <footer className={`footer ${isUploadPage ? 'upload-footer' : ''} ${(isHelpPage || isPrivacyPage) ? 'footer--flush' : ''}`} role="contentinfo">
+  <footer className={`footer ${isUploadPage ? 'upload-footer' : ''} ${(isHelpPage || isPrivacyPage || isTermsPage) ? 'footer--flush' : ''}`} role="contentinfo">
       <div className="footer-container">
         <div className="footer-main" aria-label="Footer navigation">
           <section className="footer-section company-info">
@@ -58,7 +59,7 @@ const Footer = () => {
             </div>
             <div className="legal-links">
               <Link to="/privacy">Privacy Policy</Link>
-              <Link to="/help#terms">Terms of Service</Link>
+              <Link to="/terms">Terms of Service</Link>
             </div>
           </div>
         </div>
