@@ -714,7 +714,7 @@ const sendMessage = async () => {
               </div>
 
               {isUploading && (
-                <div className="progress">
+                <div className="progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={uploadProgress}>
                   <div
                     className="progress-bar"
                     style={{ width: `${uploadProgress}%` }}
