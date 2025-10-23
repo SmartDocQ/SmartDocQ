@@ -6,6 +6,7 @@ const { verifyToken, ensureActive } = require("./auth");
 const fetch = require("node-fetch");
 
 const FLASK_INDEX_URL = process.env.FLASK_INDEX_URL || "http://localhost:5001/api/index-from-atlas";
+const FLASK_REPLACE_TEXT_URL = process.env.FLASK_REPLACE_TEXT_URL || "http://localhost:5001/api/index/replace-text";
 
 const storage = multer.memoryStorage();
 const upload = multer({
@@ -375,3 +376,57 @@ async function triggerIndexing(documentId) {
     } catch (_) {}
   }
 }
+
+// ---- Replace text content and reindex (incremental update for text documents) ----
+router.patch("/:id/text", verifyToken, ensureActive, async (req, res) => {
+  try {
+    const { text } = req.body || {};
+    if (typeof text !== "string") {
+      return res.status(400).json({ message: "Invalid or missing text" });
+    }
+
+    // Ensure the document belongs to the user
+    const doc = await Document.findOne({ _id: req.params.id, user: req.userId });
+    if (!doc) return res.status(404).json({ message: "Document not found" });
+
+    // If the original document is a text file, update stored binary for single source of truth
+    if ((doc.type || "").toLowerCase() === "text/plain") {
+      const buf = Buffer.from(text, "utf8");
+      doc.data = buf;
+      doc.size = buf.length;
+      doc.processingStatus = "indexing";
+      doc.processingError = "";
+      await doc.save();
+    }
+
+    // Ask Flask to reindex from provided text without full file round-trip
+    const resp = await fetch(FLASK_REPLACE_TEXT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ documentId: doc.doc_id, text, filename: doc.name })
+    });
+
+    const payload = await resp.json().catch(() => ({}));
+
+    if (!resp.ok) {
+      // Persist failure state if we previously set indexing state
+      try {
+        if ((doc.type || "").toLowerCase() === "text/plain") {
+          await Document.findByIdAndUpdate(doc._id, { processingStatus: "failed", processingError: payload?.error || "Indexing failed" });
+        }
+      } catch (_) {}
+      return res.status(resp.status).json(payload);
+    }
+
+    // Update status on success for text docs
+    try {
+      if ((doc.type || "").toLowerCase() === "text/plain") {
+        await Document.findByIdAndUpdate(doc._id, { processingStatus: "done", processedAt: new Date(), processingError: "" });
+      }
+    } catch (_) {}
+
+    return res.json({ message: payload?.message || "Reindexed", doc_id: doc.doc_id, requireConfirmation: !!payload?.requireConfirmation, sensitiveSummary: payload?.sensitiveSummary || null });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+});

@@ -714,12 +714,10 @@ const sendMessage = async () => {
               </div>
 
               {isUploading && (
-                <div className="progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={uploadProgress}>
-                  <div
-                    className="progress-bar"
-                    style={{ width: `${uploadProgress}%` }}
-                  />
-                  <span className="progress-label">{uploadProgress}%</span>
+                <div style={{ marginTop: 16 }}>
+                  {/* Simple, native progress element for maximum reliability */}
+                  <progress className="progress-native" max={100} value={Math.max(0, Math.min(100, uploadProgress))} />
+                  <div className="progress-native-label">{uploadProgress}%</div>
                 </div>
               )}
 
@@ -741,6 +739,12 @@ const sendMessage = async () => {
               setPreviewWidth={setPreviewWidth}
               setLastPreviewWidth={setLastPreviewWidth}
               setIsPreviewOpen={setIsPreviewOpen}
+              documentId={currentDoc?.documentId || currentDoc?._id || currentDoc?.id}
+              filename={currentDoc?.name}
+              onTextSaved={() => {
+                // Refresh history so size/timestamps update for text/plain docs
+                fetchHistory();
+              }}
             />
 
             <Chat

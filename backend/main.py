@@ -863,6 +863,69 @@ def index_bytes(doc_id: str, filename: str, mimetype: str, data: bytes):
     flush_batch()
     return True, added
 
+def index_text(doc_id: str, filename: str, text: str):
+    """
+    Index plain text content for a given document id by replacing existing chunks.
+    Returns (indexed: bool, added_count: int).
+    """
+    text = (text or "").strip()
+    if not text:
+        return False, 0
+
+    # Remove any existing chunks for this document to avoid duplicate IDs
+    try:
+        existing = collection.get(where={"doc_id": doc_id}) or {}
+        existing_ids = existing.get("ids", []) or []
+        if existing_ids:
+            collection.delete(ids=existing_ids)
+    except Exception:
+        pass
+
+    chunks = chunk_text(text)
+    added = 0
+
+    # Batch add to Chroma to reduce DB overhead
+    BATCH_SIZE = 64
+    batch_embeddings = []
+    batch_documents = []
+    batch_metadatas = []
+    batch_ids = []
+
+    def flush_batch():
+        nonlocal added, batch_embeddings, batch_documents, batch_metadatas, batch_ids
+        if not batch_ids:
+            return
+        collection.add(
+            embeddings=batch_embeddings,
+            documents=batch_documents,
+            metadatas=batch_metadatas,
+            ids=batch_ids,
+        )
+        added += len(batch_ids)
+        batch_embeddings = []
+        batch_documents = []
+        batch_metadatas = []
+        batch_ids = []
+
+    for i, chunk in enumerate(chunks):
+        c = (chunk or "").strip()
+        if not c:
+            continue
+        emb = generate_embeddings(c)
+        if not emb:
+            continue
+        batch_embeddings.append(emb)
+        batch_documents.append(c)
+        batch_metadatas.append({"doc_id": doc_id, "chunk": i, "filename": filename or "document.txt"})
+        batch_ids.append(f"{doc_id}_{i}")
+
+        if len(batch_ids) >= BATCH_SIZE:
+            flush_batch()
+
+    # Flush remaining items
+    flush_batch()
+    return True, added
+
 # Endpoint to record user consent and optionally trigger indexing
 @app.route("/api/document/consent", methods=["POST"])
 def set_consent():
@@ -890,6 +953,50 @@ def set_consent():
         return jsonify({"message": "Consent declined. Please upload a cleaned document.", "requireConfirmation": False})
 
     return jsonify({"message": "Consent recorded.", "requireConfirmation": False})
+
+@app.route("/api/index/replace-text", methods=["POST"])
+def replace_text_index():
+    """
+    Replace the indexed content for a document with the provided plain text, without re-uploading the file.
+    Request JSON:
+      { "doc_id"|"documentId": str, "text": str, "filename"?: str }
+    Response JSON mirrors /api/index-from-atlas with requireConfirmation handling.
+    """
+    body = request.get_json(silent=True) or {}
+    doc_id = (body.get("documentId") or body.get("doc_id") or "").strip()
+    text = body.get("text")
+    filename = (body.get("filename") or "document.txt").strip()
+
+    if not doc_id:
+        return jsonify({"error": "Missing documentId"}), 400
+    if text is None:
+        return jsonify({"error": "Missing text"}), 400
+
+    try:
+        # Scan and respect consent before indexing
+        scan = detect_sensitive(text or "")
+        prev = consent_state.get(doc_id) or {}
+        consent_state[doc_id] = {
+            "sensitive": bool(scan.get("found")),
+            "confirmed": bool(prev.get("confirmed", False)),
+            "awaiting": False,
+            "last_scan": "ok",
+            "summary": scan,
+        }
+        if scan.get("found") and not prev.get("confirmed", False):
+            return jsonify({
+                "message": "Sensitive data detected; indexing deferred until consent.",
+                "requireConfirmation": True,
+                "sensitiveSummary": scan,
+                "doc_id": doc_id,
+            }), 200
+
+        indexed, added = index_text(doc_id, filename, text)
+        if not indexed:
+            return jsonify({"error": "Empty text or indexing failed"}), 400
+        return jsonify({"message": f"Indexed {added} chunks", "doc_id": doc_id, "requireConfirmation": False})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
     # Register blueprints and initialize modules
 try:

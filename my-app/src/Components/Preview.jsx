@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { useToast } from "./ToastContext";
+import { apiUrl } from "../config";
 import "./Preview.css";
 
 const Preview = ({
@@ -10,6 +12,9 @@ const Preview = ({
   setPreviewWidth,
   setLastPreviewWidth,
   setIsPreviewOpen,
+  documentId,
+  filename,
+  onTextSaved,
 }) => {
   const previewRef = useRef(null);
 
@@ -63,7 +68,17 @@ const Preview = ({
 
       {isOpen && (
         <div className="preview-content">
-          {file ? <PreviewRenderer file={file} fileUrl={fileUrl} /> : <EmptyPreview />}
+          {file ? (
+            <PreviewRenderer
+              file={file}
+              fileUrl={fileUrl}
+              documentId={documentId}
+              filename={filename || file?.name}
+              onTextSaved={onTextSaved}
+            />
+          ) : (
+            <EmptyPreview />
+          )}
         </div>
       )}
     </div>
@@ -71,7 +86,7 @@ const Preview = ({
 };
 
 // --- Inner Components ---
-function PreviewRenderer({ file, fileUrl }) {
+function PreviewRenderer({ file, fileUrl, documentId, filename, onTextSaved }) {
   if (!file) return null;
 
   const type = file.type;
@@ -108,7 +123,7 @@ function PreviewRenderer({ file, fileUrl }) {
 
   // Text preview
   if (type === "text/plain" || extension === "txt") {
-    return <PlainTextPreview file={file} />;
+    return <PlainTextPreview file={file} documentId={documentId} filename={filename} onTextSaved={onTextSaved} />;
   }
 
   // Word preview fallback
@@ -140,12 +155,14 @@ function PreviewRenderer({ file, fileUrl }) {
   );
 }
 
-function PlainTextPreview({ file }) {
+function PlainTextPreview({ file, documentId, filename, onTextSaved }) {
   const [text, setText] = useState("Loading...");
   const [isEditing, setIsEditing] = useState(false);
   const [editedText, setEditedText] = useState("");
   const [status, setStatus] = useState("saved");
+  const [isSaving, setIsSaving] = useState(false);
   const textareaRef = useRef(null);
+  const { showToast } = useToast();
 
   useEffect(() => {
     const reader = new FileReader();
@@ -176,9 +193,7 @@ function PlainTextPreview({ file }) {
     const handleKeyDown = (e) => {
       if (isEditing && (e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
-        setText(editedText);
-        setIsEditing(false);
-        setStatus("saved");
+        doSave();
       }
     };
 
@@ -204,10 +219,51 @@ function PlainTextPreview({ file }) {
     }, 10);
   };
 
+  const doSave = async () => {
+    if (!documentId) {
+      // Local-only fallback
+      setText(editedText);
+      setIsEditing(false);
+      setStatus("saved");
+      showToast && showToast("Saved locally (no documentId)", { type: "info" });
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      const token = localStorage.getItem("token");
+      const res = await fetch(apiUrl(`/api/document/${documentId}/text`), {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+        body: JSON.stringify({ text: editedText }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg = data?.message || data?.error || "Save failed";
+        throw new Error(msg);
+      }
+
+      if (data?.requireConfirmation) {
+        showToast && showToast("Sensitive content detected; indexing paused until you consent.", { type: "info" });
+      } else {
+        showToast && showToast("Saved and reindexed", { type: "success" });
+      }
+      setText(editedText);
+      setIsEditing(false);
+      setStatus("saved");
+      onTextSaved && onTextSaved(data?.message || "Saved");
+    } catch (e) {
+      showToast && showToast(e.message || "Save failed", { type: "error" });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleSave = () => {
-    setText(editedText);
-    setIsEditing(false);
-    setStatus("saved");
+    doSave();
   };
 
   const handleCancel = () => {
@@ -228,8 +284,8 @@ function PlainTextPreview({ file }) {
       <div className="text-preview-controls">
         {isEditing ? (
           <>
-            <button className="text-control-btn save-btn" onClick={handleSave}>
-              Save
+            <button className="text-control-btn save-btn" onClick={handleSave} disabled={isSaving}>
+              {isSaving ? "Saving..." : "Save"}
             </button>
             <button className="text-control-btn cancel-btn" onClick={handleCancel}>
               Cancel
