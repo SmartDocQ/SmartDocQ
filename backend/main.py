@@ -767,9 +767,21 @@ Answer strictly from the context with proper formatting:
 
         # Return AI answer with improved formatting
         if response and response.text:
-            answer_text = response.text.strip()
-            # Improve formatting of the response
-            answer_text = format_response(answer_text)
+            raw_text = (response.text or "").strip()
+            # If the model indicates the answer isn't in context, offer general knowledge y/n choice
+            if is_out_of_doc_answer(raw_text):
+                general_fallback[doc_id] = {
+                    "awaiting": True,
+                    "pending_question": question,
+                }
+                appended = (
+                    raw_text
+                    + "\n\nDo you want me to answer using general knowledge instead? Reply \"y\" for yes or \"n\" for no."
+                )
+                return jsonify({"answer": format_response(appended), "requireConfirmation": False})
+
+            # Otherwise, format and return normally
+            answer_text = format_response(raw_text)
             return jsonify({"answer": answer_text, "requireConfirmation": False})
         else:
             return jsonify({"answer": "⚠️ Could not generate answer."})
@@ -807,6 +819,33 @@ def format_response(text):
     # Clean up and return
     text = text.strip()
     return text
+
+def is_out_of_doc_answer(text: str) -> bool:
+    """Heuristically detect when the LLM indicates the answer isn't in the provided context/document.
+    This helps us surface the y/n general-knowledge prompt even when reranked context existed but lacked the answer.
+    """
+    low = (text or "").strip().lower()
+    if not low:
+        return False
+    patterns = [
+        "not in the context",
+        "context provided does not contain",
+        "provided context does not contain",
+        "does not contain information",
+        "doesn't contain information",
+        "i couldn't find",
+        "i could not find",
+        "couldn't find in your document",
+        "could not find in your document",
+        "not found in your document",
+        "not found in the document",
+        "no relevant information",
+        "not available in the document",
+        "outside the document",
+        "outside of the document",
+        "not present in the document",
+    ]
+    return any(p in low for p in patterns)
 
 def fetch_doc_from_node(doc_id: str):
     """Fetch binary document from Node API /api/document/:id/download (requires user token in frontend).
