@@ -674,8 +674,10 @@ Question: {orig_q}
                     "answer": "Okay, I won't answer that. Please ask a question based on the uploaded document.",
                 })
 
-            # Not an explicit y/n: do not block; fall through to attempt retrieval again
-            pass
+            # Still awaiting an explicit y/n
+            return jsonify({
+                "answer": "⚠️ I couldn't find relevant information about your question in the uploaded document.\nDo you want me to answer using general knowledge instead? Reply \"y\" for yes or \"n\" for no.",
+            })
 
         # Ensure the document is indexed in Chroma for this doc_id. If not, start background indexing and return fast.
         if not has_index(doc_id):
@@ -726,19 +728,20 @@ Question: {orig_q}
         topk = [c[-1] for c in candidates[:5] if c[1] is None or c[1] < 0.9]
         filtered = [doc for doc, dist in zip(docs, dists) if (dist is None) or (dist < 0.6)]
         if not topk and not filtered:
+            # No relevant chunks found: offer user a choice to use general knowledge (y/n)
+            general_fallback[doc_id] = {
+                "awaiting": True,
+                "pending_question": question,
+            }
             return jsonify({
-                "answer": "I couldn't find information about that in your document. Try rephrasing with keywords that appear in the file.",
+                "answer": (
+                    "I couldn't find relevant information about your question in the uploaded document.\n"
+                    "Do you want me to answer using general knowledge instead? Reply \"y\" for yes or \"n\" for no."
+                )
             })
 
         # Combine chunks into context: prefer reranked results, fall back to strict filtered
-        context_chunks = topk or filtered
-        # If a general-fallback prompt was pending earlier, clear it now that we have relevant context
-        try:
-            if context_chunks and (general_fallback.get(doc_id) or {}).get("awaiting"):
-                general_fallback[doc_id] = {"awaiting": False}
-        except Exception:
-            pass
-        context = "\n\n".join(context_chunks)
+        context = "\n\n".join(topk or filtered)
 
         # Build prompt for LLM with formatting instructions
         prompt = f"""
