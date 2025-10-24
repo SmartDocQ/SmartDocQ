@@ -15,6 +15,17 @@ import concurrent.futures
 import threading
 profanity.load_censor_words()
 import re
+import csv
+
+# Lazy imports for Excel support; import inside functions to avoid hard failure if missing
+try:
+    import openpyxl  # for .xlsx
+except Exception:
+    openpyxl = None
+try:
+    import xlrd  # for .xls
+except Exception:
+    xlrd = None
 
 # Cache for converted PDFs (in production, use Redis or file-based cache)
 pdf_cache = {}
@@ -261,7 +272,106 @@ def extract_text_for_mimetype(filename: str, mimetype: str, data: bytes) -> str:
         return extract_text_from_docx_bytes(data)
     elif mimetype == "text/plain" or ext == "txt":
         return extract_text_from_txt_bytes(data)
+    # Excel: .xlsx
+    elif mimetype in ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",) or ext in ("xlsx",):
+        return extract_text_from_xlsx_bytes(data)
+    # Excel: .xls (legacy)
+    elif mimetype in ("application/vnd.ms-excel",) or ext in ("xls",):
+        return extract_text_from_xls_bytes(data)
+    # CSV
+    elif mimetype in ("text/csv", "application/csv") or ext in ("csv",):
+        return extract_text_from_csv_bytes(data)
     return ""
+
+def extract_text_from_xlsx_bytes(data: bytes) -> str:
+    """Extract text from .xlsx using openpyxl without heavy pandas dependency.
+    Joins cells by comma, rows by newline, and separates sheets with headers.
+    """
+    if openpyxl is None:
+        print("openpyxl not installed; cannot parse .xlsx")
+        return ""
+    try:
+        wb = openpyxl.load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+        parts = []
+        for ws in wb.worksheets:
+            parts.append(f"# Sheet: {ws.title}")
+            row_count = 0
+            for row in ws.iter_rows(values_only=True):
+                # Limit excessively large sheets to keep indexing bounded
+                row_count += 1
+                if row_count > 20000:
+                    parts.append("… (truncated) …")
+                    break
+                cells = [str(c) if c is not None else "" for c in row]
+                # Compact: join by comma; strip trailing empties
+                while cells and cells[-1] == "":
+                    cells.pop()
+                parts.append(", ".join(cells))
+        return "\n".join(parts)
+    except Exception as e:
+        print("XLSX extraction error:", e)
+        return ""
+
+def extract_text_from_xls_bytes(data: bytes) -> str:
+    """Extract text from legacy .xls using xlrd."""
+    if xlrd is None:
+        print("xlrd not installed; cannot parse .xls")
+        return ""
+    try:
+        book = xlrd.open_workbook(file_contents=data)
+        parts = []
+        for si in range(book.nsheets):
+            sh = book.sheet_by_index(si)
+            parts.append(f"# Sheet: {sh.name}")
+            row_count = 0
+            for r in range(sh.nrows):
+                row_count += 1
+                if row_count > 20000:
+                    parts.append("… (truncated) …")
+                    break
+                cells = []
+                for c in range(sh.ncols):
+                    val = sh.cell_value(r, c)
+                    cells.append(str(val) if val is not None else "")
+                while cells and cells[-1] == "":
+                    cells.pop()
+                parts.append(", ".join(cells))
+        return "\n".join(parts)
+    except Exception as e:
+        print("XLS extraction error:", e)
+        return ""
+
+def extract_text_from_csv_bytes(data: bytes) -> str:
+    """Extract text from CSV with basic dialect sniffing."""
+    try:
+        text = data.decode("utf-8", errors="ignore")
+    except Exception:
+        try:
+            text = data.decode("latin-1", errors="ignore")
+        except Exception as e:
+            print("CSV decode error:", e)
+            return ""
+
+    try:
+        sniffer = csv.Sniffer()
+        dialect = sniffer.sniff(text[:2048])
+    except Exception:
+        dialect = csv.excel
+    try:
+        reader = csv.reader(io.StringIO(text), dialect)
+        parts = []
+        for i, row in enumerate(reader):
+            if i > 20000:
+                parts.append("… (truncated) …")
+                break
+            cells = [cell.strip() for cell in row]
+            while cells and cells[-1] == "":
+                cells.pop()
+            parts.append(", ".join(cells))
+        return "\n".join(parts)
+    except Exception as e:
+        print("CSV parse error:", e)
+        return text  # fallback as-is
 
 def chunk_text(text, size=1000, overlap=200):
     chunks, start = [], 0
@@ -272,6 +382,33 @@ def chunk_text(text, size=1000, overlap=200):
         if start >= len(text): 
             break
     return chunks
+
+def split_sheet_sections(text: str):
+    """Split text into sections by lines that start with '# Sheet: <name>'.
+    Returns list of tuples (sheet_name, content_str). If no markers found, returns [(None, text)].
+    """
+    lines = (text or "").splitlines()
+    sections = []
+    current_name = None
+    current_lines = []
+    found = False
+    for ln in lines:
+        if ln.startswith("# Sheet: "):
+            found = True
+            # flush current
+            if current_lines:
+                sections.append((current_name, "\n".join(current_lines).strip()))
+                current_lines = []
+            current_name = ln[len("# Sheet: "):].strip() or None
+        else:
+            current_lines.append(ln)
+    # flush last
+    if current_lines:
+        sections.append((current_name, "\n".join(current_lines).strip()))
+    if not found:
+        return [(None, text or "")]
+    # Filter empty sections
+    return [(name, body) for (name, body) in sections if (body or "").strip()]
 
 def _embed_call(text: str):
     return genai.embed_content(
@@ -818,7 +955,8 @@ def index_bytes(doc_id: str, filename: str, mimetype: str, data: bytes):
     except Exception as _:
         pass
 
-    chunks = chunk_text(text)
+    # If the text contains sheet markers, keep sheet metadata for better retrieval
+    sections = split_sheet_sections(text)
     added = 0
 
     # Batch add to Chroma to reduce DB overhead
@@ -844,17 +982,24 @@ def index_bytes(doc_id: str, filename: str, mimetype: str, data: bytes):
         batch_metadatas = []
         batch_ids = []
 
-    for i, chunk in enumerate(chunks):
-        c = (chunk or "").strip()
-        if not c:
-            continue
-        emb = generate_embeddings(c)
-        if not emb:
-            continue
-        batch_embeddings.append(emb)
-        batch_documents.append(c)
-        batch_metadatas.append({"doc_id": doc_id, "chunk": i, "filename": filename})
-        batch_ids.append(f"{doc_id}_{i}")
+    chunk_index = 0
+    for (sheet_name, body) in sections:
+        chunks = chunk_text(body)
+        for i, chunk in enumerate(chunks):
+            c = (chunk or "").strip()
+            if not c:
+                continue
+            emb = generate_embeddings(c)
+            if not emb:
+                continue
+            batch_embeddings.append(emb)
+            batch_documents.append(c)
+            meta = {"doc_id": doc_id, "chunk": chunk_index, "filename": filename}
+            if sheet_name:
+                meta["sheet"] = sheet_name
+            batch_metadatas.append(meta)
+            batch_ids.append(f"{doc_id}_{chunk_index}")
+            chunk_index += 1
 
         if len(batch_ids) >= BATCH_SIZE:
             flush_batch()
@@ -881,7 +1026,7 @@ def index_text(doc_id: str, filename: str, text: str):
     except Exception:
         pass
 
-    chunks = chunk_text(text)
+    sections = split_sheet_sections(text)
     added = 0
 
     # Batch add to Chroma to reduce DB overhead
@@ -907,17 +1052,24 @@ def index_text(doc_id: str, filename: str, text: str):
         batch_metadatas = []
         batch_ids = []
 
-    for i, chunk in enumerate(chunks):
-        c = (chunk or "").strip()
-        if not c:
-            continue
-        emb = generate_embeddings(c)
-        if not emb:
-            continue
-        batch_embeddings.append(emb)
-        batch_documents.append(c)
-        batch_metadatas.append({"doc_id": doc_id, "chunk": i, "filename": filename or "document.txt"})
-        batch_ids.append(f"{doc_id}_{i}")
+    chunk_index = 0
+    for (sheet_name, body) in sections:
+        chunks = chunk_text(body)
+        for i, chunk in enumerate(chunks):
+            c = (chunk or "").strip()
+            if not c:
+                continue
+            emb = generate_embeddings(c)
+            if not emb:
+                continue
+            batch_embeddings.append(emb)
+            batch_documents.append(c)
+            meta = {"doc_id": doc_id, "chunk": chunk_index, "filename": filename or "document.txt"}
+            if sheet_name:
+                meta["sheet"] = sheet_name
+            batch_metadatas.append(meta)
+            batch_ids.append(f"{doc_id}_{chunk_index}")
+            chunk_index += 1
 
         if len(batch_ids) >= BATCH_SIZE:
             flush_batch()

@@ -40,7 +40,13 @@ const upload = multer({
       "application/pdf",
       "application/msword",
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "text/plain"
+      "text/plain",
+      // Excel & CSV
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
+      "application/vnd.ms-excel", // .xls (legacy)
+      "application/vnd.ms-excel.sheet.macroEnabled.12", // .xlsm
+      "text/csv",
+      "application/csv"
     ];
     if (!allowed.includes(file.mimetype)) {
       return cb(new Error("Unsupported file type!"));

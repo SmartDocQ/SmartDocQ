@@ -35,13 +35,19 @@ const UploadPage = () => {
   const isOverDrop = useRef(false);
   const fileInputRef = useRef(null);
 
-  // Supported file types: PDF, Word, and Text only
+  // Supported file types: PDF, Word, Text, Excel, and CSV
   const supportedTypes = useMemo(
     () => [
       "application/pdf",
       "text/plain",
       "application/msword",
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      // Excel & CSV
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
+      "application/vnd.ms-excel", // .xls
+      "application/vnd.ms-excel.sheet.macroEnabled.12", // .xlsm
+      "text/csv",
+      "application/csv",
     ],
     []
   );
@@ -660,7 +666,7 @@ const sendMessage = async () => {
                 <input
                   type="file"
                   multiple
-                  accept=".pdf,.doc,.docx,.txt"
+                  accept=".pdf,.doc,.docx,.txt,.xls,.xlsx,.csv"
                   onChange={handleFileChange}
                   className="file-input"
                   id="file-upload"
@@ -723,7 +729,7 @@ const sendMessage = async () => {
 
               {/* File type restrictions notice */}
               <div className="file-restrictions">
-                <p>Allowed file types: PDF, Word, and Text files</p>
+                <p>Allowed file types: PDF, Word, Text, Excel (.xls, .xlsx), and CSV</p>
                 <p>Maximum file size: 25MB</p>
               </div>
             </div>

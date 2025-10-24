@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import * as XLSX from "xlsx";
 import { useToast } from "./ToastContext";
 import { apiUrl } from "../config";
 import "./Preview.css";
@@ -118,6 +119,23 @@ function PreviewRenderer({ file, fileUrl, documentId, filename, onTextSaved }) {
           </object>
         </div>
       </div>
+    );
+  }
+
+  // Excel/CSV preview
+  if (
+    type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+    type === "application/vnd.ms-excel" ||
+    type === "application/vnd.ms-excel.sheet.macroEnabled.12" ||
+    type === "text/csv" ||
+    type === "application/csv" ||
+    extension === "xls" ||
+    extension === "xlsx" ||
+    extension === "xlsm" ||
+    extension === "csv"
+  ) {
+    return (
+      <SpreadsheetPreview file={file} filename={filename || file?.name} />
     );
   }
 
@@ -328,3 +346,102 @@ function EmptyPreview() {
 }
 
 export default Preview;
+
+// --- Spreadsheet Preview ---
+function SpreadsheetPreview({ file, filename }) {
+  const [sheetNames, setSheetNames] = useState(["Sheet1"]);
+  const [selected, setSelected] = useState("Sheet1");
+  const [rows, setRows] = useState([]);
+  const [info, setInfo] = useState({ totalRows: 0, totalCols: 0 });
+  const MAX_ROWS = 100;
+  const MAX_COLS = 30;
+
+  useEffect(() => {
+    let cancelled = false;
+    async function parse() {
+      try {
+        const ab = await file.arrayBuffer();
+        const wb = XLSX.read(ab, { type: "array" });
+        const names = wb.SheetNames && wb.SheetNames.length ? wb.SheetNames : ["Sheet1"];
+        if (cancelled) return;
+        setSheetNames(names);
+        setSelected(names[0]);
+
+        const ws = wb.Sheets[names[0]];
+        const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false });
+        const totalRows = aoa.length;
+        const totalCols = Math.max(0, ...aoa.map(r => (Array.isArray(r) ? r.length : 0)));
+        const preview = aoa.slice(0, MAX_ROWS).map(r => (Array.isArray(r) ? r.slice(0, MAX_COLS) : []));
+        if (cancelled) return;
+        setRows(preview);
+        setInfo({ totalRows, totalCols });
+      } catch (e) {
+        console.error("Spreadsheet preview error:", e);
+        setRows([["Failed to parse spreadsheet for preview."]]);
+      }
+    }
+    parse();
+    return () => { cancelled = true; };
+  }, [file]);
+
+  const onChangeSheet = async (name) => {
+    setSelected(name);
+    try {
+      const ab = await file.arrayBuffer();
+      const wb = XLSX.read(ab, { type: "array" });
+      const ws = wb.Sheets[name];
+      const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false });
+      const totalRows = aoa.length;
+      const totalCols = Math.max(0, ...aoa.map(r => (Array.isArray(r) ? r.length : 0)));
+      const preview = aoa.slice(0, MAX_ROWS).map(r => (Array.isArray(r) ? r.slice(0, MAX_COLS) : []));
+      setRows(preview);
+      setInfo({ totalRows, totalCols });
+    } catch (e) {
+      console.error("Sheet switch error:", e);
+    }
+  };
+
+  return (
+    <div className="sheet-preview">
+      <div className="sheet-header">
+        <div className="sheet-title">Spreadsheet Preview</div>
+        {sheetNames.length > 1 && (
+          <div className="sheet-switcher">
+            <label htmlFor="sheet-select" className="sr-only">Sheet</label>
+            <select id="sheet-select" value={selected} onChange={(e) => onChangeSheet(e.target.value)}>
+              {sheetNames.map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
+        )}
+      </div>
+
+      <div className="sheet-meta">
+        <span className="filename">{filename}</span>
+        <span className="meta-spacer">•</span>
+        <span>Showing first {Math.min(info.totalRows, MAX_ROWS)} of {info.totalRows} rows</span>
+        <span className="meta-spacer">•</span>
+        <span>Up to {Math.min(info.totalCols, MAX_COLS)} columns</span>
+      </div>
+
+      <div className="sheet-table-wrap">
+        <table className="sheet-table">
+          <tbody>
+            {rows.map((r, idx) => (
+              <tr key={idx}>
+                {r.map((c, j) => (
+                  <td key={j} title={String(c ?? "").slice(0, 500)}>
+                    {String(c ?? "")}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {(info.totalRows > MAX_ROWS || info.totalCols > MAX_COLS) && (
+        <div className="sheet-note">Preview truncated for performance. Full content is indexed for Q&A.</div>
+      )}
+    </div>
+  );
+}
