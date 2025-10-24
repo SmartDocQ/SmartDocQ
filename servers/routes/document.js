@@ -386,14 +386,33 @@ async function triggerIndexing(documentId) {
     await doc.save();
 
     // Ask Flask to index by Atlas doc_id
-    await fetch(FLASK_INDEX_URL, {
+    const resp = await fetch(FLASK_INDEX_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ documentId: doc.doc_id })
     });
+    let payload = {};
+    try { payload = await resp.json(); } catch (_e) {}
 
+    if (!resp.ok) {
+      doc.processingStatus = "failed";
+      doc.processingError = payload?.error || `Indexing failed (${resp.status})`;
+      await doc.save();
+      return;
+    }
+
+    if (payload?.requireConfirmation) {
+      // Sensitive content detected; wait for user consent
+      doc.processingStatus = "awaiting-consent";
+      doc.processingError = "";
+      await doc.save();
+      return;
+    }
+
+    // Success
     doc.processingStatus = "done";
     doc.processedAt = new Date();
+    doc.processingError = "";
     await doc.save();
   } catch (err) {
     try {

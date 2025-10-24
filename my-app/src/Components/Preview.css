@@ -37,6 +37,69 @@
   flex-direction: column;
 }
 
+/* Spreadsheet Preview */
+.sheet-preview {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0; /* allow children to size properly in flex */
+  background: linear-gradient(135deg, #0f0f0f 0%, #080808 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: rgba(0,0,0,0.25);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sheet-title { color: #e0e0e0; font-weight: 600; }
+.sheet-switcher select {
+  background: rgba(255,255,255,0.04);
+  color: #e0e0e0;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+.sheet-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #9ca3af;
+  font-size: 12px;
+  padding: 6px 12px;
+  background: rgba(0,0,0,0.15);
+}
+.sheet-meta .filename { color: #c7d2fe; }
+.sheet-meta .meta-spacer { opacity: 0.5; }
+
+.sheet-table-wrap {
+  flex: 1;
+  overflow: auto; /* scrollable both directions */
+  padding: 8px;
+}
+
+.sheet-table {
+  width: max-content; /* allow horizontal scroll based on content */
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.sheet-table td {
+  border: 1px solid rgba(255,255,255,0.08);
+  padding: 6px 8px;
+  color: #e5e7eb;
+  white-space: nowrap; /* closer to spreadsheet look */
+}
+.sheet-note {
+  padding: 8px 12px;
+  color: #9ca3af;
+  font-size: 12px;
+}
+
 .preview-empty-state {
   display: flex;
   flex-direction: column;

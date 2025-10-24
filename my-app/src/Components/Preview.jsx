@@ -353,8 +353,6 @@ function SpreadsheetPreview({ file, filename }) {
   const [selected, setSelected] = useState("Sheet1");
   const [rows, setRows] = useState([]);
   const [info, setInfo] = useState({ totalRows: 0, totalCols: 0 });
-  const MAX_ROWS = 100;
-  const MAX_COLS = 30;
 
   useEffect(() => {
     let cancelled = false;
@@ -368,10 +366,10 @@ function SpreadsheetPreview({ file, filename }) {
         setSelected(names[0]);
 
         const ws = wb.Sheets[names[0]];
-        const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false });
-        const totalRows = aoa.length;
-        const totalCols = Math.max(0, ...aoa.map(r => (Array.isArray(r) ? r.length : 0)));
-        const preview = aoa.slice(0, MAX_ROWS).map(r => (Array.isArray(r) ? r.slice(0, MAX_COLS) : []));
+  const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false });
+  const totalRows = aoa.length;
+  const totalCols = Math.max(0, ...aoa.map(r => (Array.isArray(r) ? r.length : 0)));
+  const preview = aoa.map(r => (Array.isArray(r) ? r : []));
         if (cancelled) return;
         setRows(preview);
         setInfo({ totalRows, totalCols });
@@ -393,7 +391,7 @@ function SpreadsheetPreview({ file, filename }) {
       const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false });
       const totalRows = aoa.length;
       const totalCols = Math.max(0, ...aoa.map(r => (Array.isArray(r) ? r.length : 0)));
-      const preview = aoa.slice(0, MAX_ROWS).map(r => (Array.isArray(r) ? r.slice(0, MAX_COLS) : []));
+      const preview = aoa.map(r => (Array.isArray(r) ? r : []));
       setRows(preview);
       setInfo({ totalRows, totalCols });
     } catch (e) {
@@ -438,10 +436,7 @@ function SpreadsheetPreview({ file, filename }) {
           </tbody>
         </table>
       </div>
-
-      {(info.totalRows > MAX_ROWS || info.totalCols > MAX_COLS) && (
-        <div className="sheet-note">Preview truncated for performance. Full content is indexed for Q&A.</div>
-      )}
+      
     </div>
   );
 }
