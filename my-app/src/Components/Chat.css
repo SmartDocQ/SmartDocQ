@@ -321,6 +321,7 @@
   border-radius: 12px;
   color: transparent; /* we only want underlines visible; text sits below textarea */
   font-size: 0.95rem;
+  font-family: inherit; /* mirror textarea font for alignment */
   line-height: 1.4;
   white-space: pre-wrap;
   word-wrap: break-word;
@@ -331,7 +332,10 @@
   text-decoration: underline wavy #ff4d4f;
   text-decoration-color: #ff4d4f;
   text-decoration-thickness: 1.5px;
-  color: transparent;
+  text-underline-offset: 3px; /* help visibility on dark backgrounds */
+  text-decoration-skip-ink: none; /* ensure underline isn't skipped */
+  color: transparent; /* keep overlay text invisible */
+  -webkit-text-fill-color: transparent; /* ensure text hidden while decoration visible */
   pointer-events: auto; /* clickable for correction */
 }
 .chat-input-wrap .chat-input { position: relative; z-index: 1; }

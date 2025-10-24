@@ -214,8 +214,10 @@ const Chat = ({ chat, setChat, chatInput, setChatInput, sendMessage, clearChat, 
       if (/^[A-Za-z'-]{1,}$/.test(segment)) {
         const low = segment.toLowerCase();
         const info = spellMap[low];
-        if (info && info.correct === false && info.suggestion) {
-          html += `<span class="miss" data-start="${start}" data-end="${end}" data-word="${segment}" data-suggest="${info.suggestion}">${segment}</span>`;
+        // Underline all incorrect words, even if no suggestion is available
+        if (info && info.correct === false) {
+          const sugAttr = (info.suggestion ? ` data-suggest="${info.suggestion}"` : "");
+          html += `<span class="miss" data-start="${start}" data-end="${end}" data-word="${segment}"${sugAttr}>${segment}</span>`;
         } else {
           html += segment;
         }
