@@ -113,10 +113,57 @@ const Chat = ({ chat, setChat, chatInput, setChatInput, sendMessage, clearChat, 
   }, [chatInput]);
 
   // Handle input change with validation
+  // Spelling suggestion state
+  const [missWord, setMissWord] = useState(null); // { word, start, end, suggestion }
+  const [lastChecked, setLastChecked] = useState({ word: '', ts: 0 });
+
+  const fetchSuggestion = async (word) => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(apiUrl(`/api/search/spellcheck?word=${encodeURIComponent(word)}`), {
+        headers: { Authorization: token ? `Bearer ${token}` : '' }
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || 'Spellcheck failed');
+      if (data && data.correct === false && Array.isArray(data.suggestions) && data.suggestions.length) {
+        setMissWord((prev) => ({ ...(prev || {}), word, suggestion: data.suggestions[0] }));
+      } else {
+        setMissWord(null);
+      }
+    } catch (_) {
+      // Silent fail
+      setMissWord(null);
+    }
+  };
+
+  const getWordAtCaret = (value, caret) => {
+    // Find token boundaries around caret in textarea value
+    let start = caret;
+    let end = caret;
+    const isWordChar = (ch) => /[A-Za-z'\-]/.test(ch || '');
+    while (start > 0 && isWordChar(value[start - 1])) start--;
+    while (end < value.length && isWordChar(value[end])) end++;
+    const word = value.slice(start, end);
+    return { word, start, end };
+  };
+
   const handleInputChange = (e) => {
     const value = e.target.value;
     if (value.length <= 750) {
       setChatInput(value);
+      // Real-time: check word at caret when user types space or ends a word
+      const caret = e.target.selectionStart || value.length;
+      const { word, start, end } = getWordAtCaret(value, caret - 1);
+      if (word && word.length >= 3) {
+        setMissWord({ word, start, end, suggestion: null });
+        const now = Date.now();
+        if (lastChecked.word !== word || now - lastChecked.ts > 800) {
+          setLastChecked({ word, ts: now });
+          fetchSuggestion(word);
+        }
+      } else {
+        setMissWord(null);
+      }
     }
   };
 
@@ -306,9 +353,29 @@ const Chat = ({ chat, setChat, chatInput, setChatInput, sendMessage, clearChat, 
           value={chatInput}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
+          spellCheck={true}
           maxLength={750}
           rows={1}
         />
+        {missWord && missWord.suggestion && (
+          <button
+            className="spell-suggest-btn"
+            type="button"
+            onClick={() => {
+              // Replace the misspelled word range with suggestion
+              const before = chatInput.slice(0, missWord.start);
+              const after = chatInput.slice(missWord.end);
+              const next = `${before}${missWord.suggestion}${after}`;
+              setChatInput(next);
+              setMissWord(null);
+              // Restore focus
+              setTimeout(() => textareaRef.current?.focus(), 0);
+            }}
+            title={`Replace "${missWord.word}" with "${missWord.suggestion}"`}
+          >
+            Fix "{missWord.word}" → "{missWord.suggestion}"
+          </button>
+        )}
         <button
           className="chat-send"
           onClick={sendMessage}

@@ -4,6 +4,24 @@ const mongoose = require("mongoose");
 const Document = require("../models/Document");
 const DocChunk = require("../models/DocChunk");
 const { verifyToken, ensureActive } = require("./auth");
+// Lazy-loaded spellchecker (nspell + dictionary-en)
+let _spell = null;
+async function getSpell() {
+  if (_spell) return _spell;
+  const nspell = require("nspell");
+  const dictionary = require("dictionary-en");
+  return new Promise((resolve, reject) => {
+    dictionary((err, dict) => {
+      if (err) return reject(err);
+      try {
+        _spell = nspell(dict);
+        resolve(_spell);
+      } catch (e) {
+        reject(e);
+      }
+    });
+  });
+}
 
 // Internal upsert endpoint for Flask to persist chunk texts for keyword/metadata search
 router.post("/internal/chunks/upsert", async (req, res) => {
@@ -110,3 +128,19 @@ router.get("/", verifyToken, ensureActive, async (req, res) => {
 });
 
 module.exports = router;
+
+// Simple spellcheck endpoint: returns whether a word is correct and a few suggestions
+router.get("/spellcheck", verifyToken, ensureActive, async (req, res) => {
+  try {
+    const word = String(req.query.word || "").trim();
+    if (!word || /[^A-Za-z'-]/.test(word) || word.length < 2) {
+      return res.json({ correct: true, suggestions: [] });
+    }
+    const spell = await getSpell();
+    const correct = spell.correct(word);
+    const suggestions = correct ? [] : spell.suggestions(word).slice(0, 5);
+    return res.json({ correct, suggestions });
+  } catch (err) {
+    return res.status(500).json({ message: err?.message || String(err) });
+  }
+});

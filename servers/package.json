@@ -32,6 +32,8 @@
     "multer": "^2.0.2",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
-    "streamifier": "^0.1.1"
+    "streamifier": "^0.1.1",
+    "nspell": "^2.1.0",
+    "dictionary-en": "^3.0.2"
   }
 }

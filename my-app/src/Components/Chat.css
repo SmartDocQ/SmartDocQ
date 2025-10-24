@@ -217,6 +217,20 @@
 }
 
 /* Thumb buttons match copy button styling */
+.spell-suggest-btn {
+  align-self: center;
+  background: #2b6cb0;
+  color: #fff;
+  border: none;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.spell-suggest-btn:hover {
+  background: #2c5282;
+}
 .thumb-button {
   background: transparent;
   border: none;
