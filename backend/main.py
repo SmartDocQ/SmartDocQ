@@ -58,6 +58,7 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 NODE_BASE_URL = os.environ.get("NODE_BASE_URL", "http://localhost:5000")
 SERVICE_TOKEN = os.environ.get("SERVICE_TOKEN", "smartdoc-service-token")
 NODE_FETCH_TIMEOUT = int(os.environ.get("NODE_FETCH_TIMEOUT", "45"))
+CHUNK_UPSERT_URL = os.environ.get("CHUNK_UPSERT_URL", f"{NODE_BASE_URL}/api/search/internal/chunks/upsert")
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
 
@@ -272,6 +273,30 @@ def chunk_text(text, size=1000, overlap=200):
         if start >= len(text): 
             break
     return chunks
+
+def split_sheet_sections(text: str):
+    """Split text into sections by lines that start with '# Sheet: <name>'.
+    Returns list of tuples (sheet_name, content_str). If no markers found, returns [(None, text)].
+    """
+    lines = (text or "").splitlines()
+    sections = []
+    current_name = None
+    current_lines = []
+    found = False
+    for ln in lines:
+        if ln.startswith("# Sheet: "):
+            found = True
+            if current_lines:
+                sections.append((current_name, "\n".join(current_lines).strip()))
+                current_lines = []
+            current_name = ln[len("# Sheet: "):].strip() or None
+        else:
+            current_lines.append(ln)
+    if current_lines:
+        sections.append((current_name, "\n".join(current_lines).strip()))
+    if not found:
+        return [(None, text or "")]
+    return [(name, body) for (name, body) in sections if (body or "").strip()]
 
 def _embed_call(text: str):
     return genai.embed_content(
@@ -818,8 +843,9 @@ def index_bytes(doc_id: str, filename: str, mimetype: str, data: bytes):
     except Exception as _:
         pass
 
-    chunks = chunk_text(text)
+    sections = split_sheet_sections(text)
     added = 0
+    chunk_records = []
 
     # Batch add to Chroma to reduce DB overhead
     BATCH_SIZE = 64
@@ -844,23 +870,36 @@ def index_bytes(doc_id: str, filename: str, mimetype: str, data: bytes):
         batch_metadatas = []
         batch_ids = []
 
-    for i, chunk in enumerate(chunks):
-        c = (chunk or "").strip()
-        if not c:
-            continue
-        emb = generate_embeddings(c)
-        if not emb:
-            continue
-        batch_embeddings.append(emb)
-        batch_documents.append(c)
-        batch_metadatas.append({"doc_id": doc_id, "chunk": i, "filename": filename})
-        batch_ids.append(f"{doc_id}_{i}")
+    chunk_index = 0
+    for (sheet_name, body) in sections:
+        chunks = chunk_text(body)
+        for i, chunk in enumerate(chunks):
+            c = (chunk or "").strip()
+            if not c:
+                continue
+            emb = generate_embeddings(c)
+            if not emb:
+                continue
+            batch_embeddings.append(emb)
+            batch_documents.append(c)
+            meta = {"doc_id": doc_id, "chunk": chunk_index, "filename": filename}
+            if sheet_name:
+                meta["sheet"] = sheet_name
+            batch_metadatas.append(meta)
+            batch_ids.append(f"{doc_id}_{chunk_index}")
+            # capture for keyword index
+            try:
+                chunk_records.append({"chunk": chunk_index, "sheet": sheet_name or None, "text": c})
+            except Exception:
+                pass
+            chunk_index += 1
 
-        if len(batch_ids) >= BATCH_SIZE:
-            flush_batch()
+            if len(batch_ids) >= BATCH_SIZE:
+                flush_batch()
 
     # Flush remaining items
     flush_batch()
+    _push_chunks_to_node(doc_id, filename, chunk_records)
     return True, added
 
 def index_text(doc_id: str, filename: str, text: str):
@@ -881,8 +920,9 @@ def index_text(doc_id: str, filename: str, text: str):
     except Exception:
         pass
 
-    chunks = chunk_text(text)
+    sections = split_sheet_sections(text)
     added = 0
+    chunk_records = []
 
     # Batch add to Chroma to reduce DB overhead
     BATCH_SIZE = 64
@@ -907,24 +947,53 @@ def index_text(doc_id: str, filename: str, text: str):
         batch_metadatas = []
         batch_ids = []
 
-    for i, chunk in enumerate(chunks):
-        c = (chunk or "").strip()
-        if not c:
-            continue
-        emb = generate_embeddings(c)
-        if not emb:
-            continue
-        batch_embeddings.append(emb)
-        batch_documents.append(c)
-        batch_metadatas.append({"doc_id": doc_id, "chunk": i, "filename": filename or "document.txt"})
-        batch_ids.append(f"{doc_id}_{i}")
+    chunk_index = 0
+    for (sheet_name, body) in sections:
+        chunks = chunk_text(body)
+        for i, chunk in enumerate(chunks):
+            c = (chunk or "").strip()
+            if not c:
+                continue
+            emb = generate_embeddings(c)
+            if not emb:
+                continue
+            batch_embeddings.append(emb)
+            batch_documents.append(c)
+            meta = {"doc_id": doc_id, "chunk": chunk_index, "filename": filename or "document.txt"}
+            if sheet_name:
+                meta["sheet"] = sheet_name
+            batch_metadatas.append(meta)
+            batch_ids.append(f"{doc_id}_{chunk_index}")
+            try:
+                chunk_records.append({"chunk": chunk_index, "sheet": sheet_name or None, "text": c})
+            except Exception:
+                pass
+            chunk_index += 1
 
-        if len(batch_ids) >= BATCH_SIZE:
-            flush_batch()
+            if len(batch_ids) >= BATCH_SIZE:
+                flush_batch()
 
     # Flush remaining items
     flush_batch()
+    _push_chunks_to_node(doc_id, filename or "document.txt", chunk_records)
     return True, added
+
+def _push_chunks_to_node(doc_id: str, filename: str, chunk_records: list):
+    """Best-effort push of chunk texts to Node for keyword/metadata search. Non-fatal on error."""
+    try:
+        if not chunk_records:
+            return
+        payload = {
+            "doc_id": doc_id,
+            "filename": filename,
+            "chunks": chunk_records,
+        }
+        headers = {"Content-Type": "application/json", "x-service-token": SERVICE_TOKEN}
+        r = requests.post(CHUNK_UPSERT_URL, json=payload, headers=headers, timeout=NODE_FETCH_TIMEOUT)
+        if r.status_code >= 300:
+            print("[Chunks Upsert] Node returned", r.status_code, r.text[:200])
+    except Exception as e:
+        print("[Chunks Upsert] Error:", e)
 
 # Endpoint to record user consent and optionally trigger indexing
 @app.route("/api/document/consent", methods=["POST"])

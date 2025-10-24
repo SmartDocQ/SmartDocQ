@@ -11,6 +11,7 @@ const documentRoutes = require("./routes/document");
 const chatRoutes = require("./routes/chat");
 const adminRoutes = require("./routes/admin");
 const contactRoutes = require("./routes/contact");
+const searchRoutes = require("./routes/search");
 
 const app = express();
 // Cloudinary config (reads from environment)
@@ -69,6 +70,7 @@ app.use("/api/document", documentRoutes); // <-- use this before listen
 app.use("/api/chat", chatRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/contact", contactRoutes);
+app.use("/api/search", searchRoutes);
 
 // Health check
 app.get("/healthz", (req, res) => res.json({ status: "ok" }));
@@ -78,11 +80,19 @@ app.get("/", (req, res) => res.send("SmartDoc API is running"));
 mongoose.connection.once("open", async () => {
   try {
     const Document = require("./models/Document");
+    const DocChunk = require("./models/DocChunk");
     // Backfill missing doc_id values
     await Document.updateMany({ doc_id: { $in: [null, ""] } }, [ { $set: { doc_id: { $toString: "$_id" } } } ]).catch(()=>{});
     // Create unique index on doc_id
     await Document.collection.createIndex({ doc_id: 1 }, { unique: true });
     console.log("Ensured unique index on documents.doc_id");
+
+    // Ensure indexes for DocChunk
+    try { await DocChunk.collection.createIndex({ doc: 1, chunk: 1 }, { unique: true }); } catch(_){}
+    try { await DocChunk.collection.createIndex({ user: 1, doc: 1 }); } catch(_){}
+    // Text index for fallback search (Atlas Search recommended for production)
+    try { await DocChunk.collection.createIndex({ text: "text" }); } catch(_){}
+    console.log("Ensured indexes on docchunks");
   } catch (e) {
     console.warn("Index setup warning:", e?.message || e);
   }
