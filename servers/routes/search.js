@@ -144,3 +144,24 @@ router.get("/spellcheck", verifyToken, ensureActive, async (req, res) => {
     return res.status(500).json({ message: err?.message || String(err) });
   }
 });
+
+// Batch spellcheck: { words: string[] } -> { results: { [word]: { correct: boolean, suggestion?: string } } }
+router.post("/spellcheck/batch", verifyToken, ensureActive, async (req, res) => {
+  try {
+    const words = Array.isArray(req.body?.words) ? req.body.words : [];
+    const cleaned = words
+      .map(w => String(w || '').trim())
+      .filter(w => !!w && /^[A-Za-z'\-]{2,}$/.test(w));
+    if (!cleaned.length) return res.json({ results: {} });
+    const unique = Array.from(new Set(cleaned.map(w => w.toLowerCase())));
+    const spell = await getSpell();
+    const results = {};
+    for (const w of unique) {
+      const correct = spell.correct(w);
+      results[w] = correct ? { correct } : { correct, suggestion: (spell.suggestions(w) || [])[0] };
+    }
+    return res.json({ results });
+  } catch (err) {
+    return res.status(500).json({ message: err?.message || String(err) });
+  }
+});
