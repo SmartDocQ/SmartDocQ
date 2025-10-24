@@ -416,9 +416,9 @@ function SpreadsheetPreview({ file, filename }) {
       <div className="sheet-meta">
         <span className="filename">{filename}</span>
         <span className="meta-spacer">•</span>
-        <span>Showing first {Math.min(info.totalRows, MAX_ROWS)} of {info.totalRows} rows</span>
+        <span>{info.totalRows} rows</span>
         <span className="meta-spacer">•</span>
-        <span>Up to {Math.min(info.totalCols, MAX_COLS)} columns</span>
+        <span>{info.totalCols} columns</span>
       </div>
 
       <div className="sheet-table-wrap">
