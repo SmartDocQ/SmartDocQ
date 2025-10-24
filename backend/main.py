@@ -265,14 +265,40 @@ def extract_text_for_mimetype(filename: str, mimetype: str, data: bytes) -> str:
     return ""
 
 def chunk_text(text, size=1000, overlap=200):
-    chunks, start = [], 0
-    while start < len(text):
-        end = start + size
-        chunks.append(text[start:end])
-        start = end - overlap
-        if start >= len(text): 
-            break
-    return chunks
+    """Paragraph-aware chunking with overlap.
+    - Prefer splitting on double newlines (paragraphs) to preserve context boundaries.
+    - Then pack paragraphs into windows up to ~size characters with overlap between windows.
+    """
+    text = (text or "").strip()
+    if not text:
+        return []
+
+    paras = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
+    if not paras:
+        paras = [text]
+
+    windows = []
+    buf = []
+    cur_len = 0
+    for p in paras:
+        p_len = len(p) + 2  # account for a newline joiner
+        if cur_len + p_len <= size or not buf:
+            buf.append(p)
+            cur_len += p_len
+        else:
+            windows.append("\n\n".join(buf))
+            # start next window with overlap from the tail of previous buffer
+            join = "\n\n".join(buf)
+            if overlap > 0 and len(join) > overlap:
+                tail = join[-overlap:]
+                buf = [tail, p]
+                cur_len = len(tail) + p_len
+            else:
+                buf = [p]
+                cur_len = p_len
+    if buf:
+        windows.append("\n\n".join(buf))
+    return windows
 
 def split_sheet_sections(text: str):
     """Split text into sections by lines that start with '# Sheet: <name>'.
@@ -648,10 +674,8 @@ Question: {orig_q}
                     "answer": "Okay, I won't answer that. Please ask a question based on the uploaded document.",
                 })
 
-            # Still awaiting an explicit y/n
-            return jsonify({
-                "answer": "⚠️ I couldn't find relevant information about your question in the uploaded document.\nDo you want me to answer using general knowledge instead? Reply \"y\" for yes or \"n\" for no.",
-            })
+            # Not an explicit y/n: do not block; fall through to attempt retrieval again
+            pass
 
         # Ensure the document is indexed in Chroma for this doc_id. If not, start background indexing and return fast.
         if not has_index(doc_id):
@@ -667,27 +691,54 @@ Question: {orig_q}
         if not q_emb:
             return jsonify({"error": "Failed to generate embedding"}), 500
 
-        # Query Chroma for top 5 relevant chunks
+        # Query Chroma for top-N relevant chunks (wider net)
         results = collection.query(
             query_embeddings=[q_emb],
-            n_results=5,
+            n_results=12,
             where={"doc_id": doc_id},
             include=["documents", "distances"]
         )
 
         docs = results.get("documents", [[]])[0] or []
         dists = results.get("distances", [[]])[0] or []
-        # Filter by distance threshold; consider as no relevant content if everything is noisy
-        filtered = [doc for doc, dist in zip(docs, dists) if (dist is None) or (dist < NOISE_DISTANCE_THRESHOLD)]
-        if not filtered:
-            # Store pending question and ask for consent to answer generally
-            general_fallback[doc_id] = {"awaiting": True, "pending_question": question}
+        # Lexical re-ranking to boost true positives inside the document
+        def _keywords(s: str):
+            stop = {"the","a","an","and","or","of","in","on","to","for","is","are","was","were","be","with","by","at","from","as","that","this","it","its","if","then","than","into","about","over","under","within","between"}
+            toks = re.split(r"[^A-Za-z0-9]+", (s or "").lower())
+            return {t for t in toks if len(t) >= 3 and t not in stop and not t.isdigit()}
+
+        q_terms = _keywords(question)
+        candidates = []
+        for doc_txt, dist in zip(docs, dists):
+            if not doc_txt:
+                continue
+            terms = _keywords(doc_txt)
+            overlap = len(q_terms & terms)
+            if dist is None:
+                dist = 0.5
+            # Combine distance (lower is better) and lexical overlap (higher is better)
+            sim = 1.0 - max(0.0, min(1.0, dist))
+            score = 0.7 * sim + 0.3 * (overlap / (len(q_terms) or 1))
+            candidates.append((score, dist, overlap, doc_txt))
+
+        # Keep top k by score; also respect a noise ceiling to cut extreme outliers
+        candidates.sort(key=lambda x: x[0], reverse=True)
+        topk = [c[-1] for c in candidates[:5] if c[1] is None or c[1] < 0.9]
+        filtered = [doc for doc, dist in zip(docs, dists) if (dist is None) or (dist < 0.6)]
+        if not topk and not filtered:
             return jsonify({
-                "answer": "⚠️ I couldn't find relevant information about your question in the uploaded document.\nDo you want me to answer using general knowledge instead? (y/n)",
+                "answer": "I couldn't find information about that in your document. Try rephrasing with keywords that appear in the file.",
             })
 
-        # Combine chunks into context
-        context = "\n\n".join(filtered)
+        # Combine chunks into context: prefer reranked results, fall back to strict filtered
+        context_chunks = topk or filtered
+        # If a general-fallback prompt was pending earlier, clear it now that we have relevant context
+        try:
+            if context_chunks and (general_fallback.get(doc_id) or {}).get("awaiting"):
+                general_fallback[doc_id] = {"awaiting": False}
+        except Exception:
+            pass
+        context = "\n\n".join(context_chunks)
 
         # Build prompt for LLM with formatting instructions
         prompt = f"""
