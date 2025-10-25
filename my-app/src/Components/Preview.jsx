@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { Document as PdfDoc, Page as PdfPage, pdfjs } from 'react-pdf';
 import { useToast } from "./ToastContext";
 import { apiUrl } from "../config";
 import "./Preview.css";
@@ -20,6 +19,8 @@ const Preview = ({
 }) => {
   const previewRef = useRef(null);
   const [selUI, setSelUI] = useState({ visible: false, text: "", rect: null });
+  const toolbarRef = useRef(null);
+  const [toolbarPos, setToolbarPos] = useState({ left: 12, top: 12 });
 
   // Handle keyboard shortcut for toggling preview panel
   useEffect(() => {
@@ -87,6 +88,21 @@ const Preview = ({
     };
   }, []);
 
+  // Recalculate toolbar position when selection changes or toolbar mounts
+  useEffect(() => {
+    if (!selUI.visible || !selUI.rect) return;
+    const margin = 8;
+    const tw = (toolbarRef.current?.offsetWidth) || 160;
+    const th = (toolbarRef.current?.offsetHeight) || 36;
+    // Prefer placing above the selection; if not enough room, place below
+    let top = selUI.rect.top - th - margin;
+    if (top < margin) top = selUI.rect.bottom + margin;
+    // Center horizontally over the selection and clamp to viewport
+    let left = selUI.rect.left + (selUI.rect.width / 2) - (tw / 2);
+    left = Math.max(margin, Math.min(window.innerWidth - tw - margin, left));
+    setToolbarPos({ left, top });
+  }, [selUI.visible, selUI.rect]);
+
   return (
     <div
       className={`preview-section ${isOpen ? "open" : "closed"}`}
@@ -142,9 +158,10 @@ const Preview = ({
             style={{
               position: 'fixed',
               zIndex: 1001,
-              left: Math.max(8, Math.min(window.innerWidth - 180, selUI.rect.left)),
-              top: Math.max(8, selUI.rect.top - 42)
+              left: toolbarPos.left,
+              top: toolbarPos.top
             }}
+            ref={toolbarRef}
           >
             <button
               className="summarize-mini"
@@ -190,18 +207,17 @@ function PreviewRenderer({ file, fileUrl, documentId, filename, onTextSaved }) {
 
   // PDF preview
   if (type === "application/pdf" || extension === "pdf") {
-    // Configure PDF worker dynamically from CDN to avoid bundler issues
-    try {
-      // @ts-ignore
-      pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
-    } catch (e) { /* noop */ }
-
     return (
       <div className="pdf-preview">
         <div className="pdf-frame-wrapper">
-          <div className="pdfjs-container">
-            <PdfDocument fileUrl={fileUrl} />
-          </div>
+          <object data={fileUrl} type="application/pdf" className="pdf-frame">
+            <div className="preview-fallback">
+              <p>PDF preview not supported.</p>
+              <a href={fileUrl} target="_blank" rel="noreferrer" className="fallback-link">
+                Open in new tab
+              </a>
+            </div>
+          </object>
         </div>
       </div>
     );
@@ -414,21 +430,3 @@ function EmptyPreview() {
 }
 
 export default Preview;
-
-function PdfDocument({ fileUrl }) {
-  const [numPages, setNumPages] = useState(null);
-  const onLoadSuccess = ({ numPages }) => setNumPages(numPages);
-  return (
-    <PdfDoc file={fileUrl} onLoadSuccess={onLoadSuccess} renderMode="canvas">
-      {Array.from(new Array(numPages || 1), (el, index) => (
-        <PdfPage
-          key={`page_${index + 1}`}
-          pageNumber={index + 1}
-          width={760}
-          renderAnnotationLayer={false}
-          renderTextLayer={true}
-        />
-      ))}
-    </PdfDoc>
-  );
-}
