@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from "react";
+import { Document, Page, pdfjs } from 'react-pdf';
 import { useToast } from "./ToastContext";
 import { apiUrl } from "../config";
 import "./Preview.css";
+
+// Configure pdf.js worker for react-pdf
+try {
+  // Use CDN worker; avoids bundler worker setup complexity
+  pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+} catch (_) { /* no-op */ }
 
 const Preview = ({
   file,
@@ -298,20 +305,7 @@ function PreviewRenderer({ file, fileUrl, documentId, filename, onTextSaved }) {
 
   // PDF preview
   if (type === "application/pdf" || extension === "pdf") {
-    return (
-      <div className="pdf-preview">
-        <div className="pdf-frame-wrapper">
-          <object data={fileUrl} type="application/pdf" className="pdf-frame">
-            <div className="preview-fallback">
-              <p>PDF preview not supported.</p>
-              <a href={fileUrl} target="_blank" rel="noreferrer" className="fallback-link">
-                Open in new tab
-              </a>
-            </div>
-          </object>
-        </div>
-      </div>
-    );
+    return <PdfPreview fileUrl={fileUrl} />;
   }
 
   // Text preview
@@ -344,6 +338,37 @@ function PreviewRenderer({ file, fileUrl, documentId, filename, onTextSaved }) {
       <div className="fallback-icon">📄</div>
       <p>Preview not available</p>
       <p className="fallback-subtitle">For this file type</p>
+    </div>
+  );
+}
+
+function PdfPreview({ fileUrl }) {
+  const [numPages, setNumPages] = useState(null);
+  const onLoadSuccess = ({ numPages }) => setNumPages(numPages || 1);
+  // Render all pages (cap to 50 for safety)
+  const pages = Array.from({ length: Math.min(numPages || 1, 50) }, (_, i) => i + 1);
+  return (
+    <div className="pdf-preview">
+      <div className="pdf-frame-wrapper">
+        <div style={{ width: '100%', height: '100%', overflow: 'auto' }}>
+          <Document file={fileUrl} onLoadSuccess={onLoadSuccess} loading={
+            <div className="preview-loading"><div className="loading-spinner"></div><p>Loading PDF…</p></div>
+          } error={
+            <div className="preview-fallback"><p>PDF failed to load.</p><a href={fileUrl} target="_blank" rel="noreferrer" className="fallback-link">Open in new tab</a></div>
+          }>
+            {pages.map((p) => (
+              <Page
+                key={p}
+                pageNumber={p}
+                width={undefined}
+                renderTextLayer
+                renderAnnotationLayer={false}
+                className="pdf-page"
+              />
+            ))}
+          </Document>
+        </div>
+      </div>
     </div>
   );
 }
