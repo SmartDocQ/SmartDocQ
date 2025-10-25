@@ -139,6 +139,11 @@ const Preview = ({
         }
       }
       setFadingOut(true);
+      // Clear the browser text selection immediately so onMouseUp won't re-open the popup
+      try {
+        const s = window.getSelection && window.getSelection();
+        if (s && s.removeAllRanges) s.removeAllRanges();
+      } catch (_) { /* ignore */ }
       setTimeout(() => setSelUI({ visible: false, text: "", rect: null }), 160);
     };
 
@@ -228,23 +233,9 @@ const Preview = ({
         </div>
       )}
 
-      {/* Floating summarize toolbar and selection rectangle (positioned in viewport coordinates) */}
+      {/* Floating summarize toolbar (no selection rectangle to avoid UI clutter) */}
       {selUI.visible && selUI.rect && (
         <>
-          <div
-            className="selection-rect"
-            style={{
-              position: 'fixed',
-              zIndex: 1000,
-              left: selUI.rect.left - 2,
-              top: selUI.rect.top - 2,
-              width: Math.max(0, selUI.rect.width + 4),
-              height: Math.max(0, selUI.rect.height + 4),
-              pointerEvents: 'none',
-              opacity: fadingOut ? 0 : 1,
-              transition: 'opacity 150ms ease'
-            }}
-          />
           <div
             className={`selection-toolbar ${justShown ? 'enter' : ''} ${fadingOut ? 'leave' : ''}`}
             style={{

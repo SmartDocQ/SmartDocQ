@@ -207,13 +207,6 @@
 }
 
 /* Selection UI (floating toolbar) */
-.selection-rect {
-  border: 1.5px dashed #a78bfa; /* purple */
-  border-radius: 6px;
-  box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.15);
-  pointer-events: none;
-}
-
 .selection-toolbar {
   background: rgba(10,10,10,0.95);
   border: 1px solid rgba(255,255,255,0.12);
