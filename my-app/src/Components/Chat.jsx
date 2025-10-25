@@ -105,12 +105,12 @@ const Chat = ({ chat, setChat, chatInput, setChatInput, sendMessage, clearChat, 
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chat, isTyping]);
 
-  // Auto-resize textarea
+  // Auto-resize textarea (preserve original 120px cap)
   useEffect(() => {
     const textarea = textareaRef.current;
     if (textarea) {
       textarea.style.height = "auto"; // Reset height
-      textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`; // Max height 120px
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`; // Original cap
     }
   }, [chatInput]);
 
