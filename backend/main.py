@@ -6,6 +6,7 @@ from docx import Document as DocxDocument
 import google.generativeai as genai
 from quiz import quiz_bp, init_quiz
 from flashcard import flashcard_bp, init_flashcards
+from summarize import init_summarizer, summarize_bp
 import chromadb
 import requests
 import tempfile, os, importlib
@@ -1185,6 +1186,12 @@ try:
         genai,
     )
     app.register_blueprint(flashcard_bp)
+except Exception as _e:
+    pass
+
+# Register summarizer
+try:
+    app.register_blueprint(init_summarizer(TEXT_MODEL, genai))
 except Exception as _e:
     pass
 

@@ -15,6 +15,7 @@ const Preview = ({
   documentId,
   filename,
   onTextSaved,
+  onSummarizeSelection,
 }) => {
   const previewRef = useRef(null);
 
@@ -64,6 +65,24 @@ const Preview = ({
         >
           📰
         </button>
+        {isOpen && (
+          <button
+            className="preview-action summarize-btn"
+            title="Summarize selected text"
+            onClick={() => {
+              try {
+                const sel = window.getSelection && window.getSelection();
+                const txt = sel ? String(sel.toString() || "").trim() : "";
+                onSummarizeSelection && onSummarizeSelection(txt);
+              } catch (_) {
+                onSummarizeSelection && onSummarizeSelection("");
+              }
+            }}
+            style={{ marginLeft: 8 }}
+          >
+            Summarize Selection
+          </button>
+        )}
       </div>
 
       {isOpen && (

@@ -745,6 +745,40 @@ const sendMessage = async () => {
                 // Refresh history so size/timestamps update for text/plain docs
                 fetchHistory();
               }}
+              onSummarizeSelection={async (selectedText) => {
+                try {
+                  const docId = currentDoc?.documentId || currentDoc?._id || currentDoc?.id;
+                  if (!selectedText) {
+                    showToast && showToast("Select text in the page to summarize. For PDFs opened in the built-in viewer, selection may not be accessible—copy the text or use text/Word preview.", { type: "info" });
+                    return;
+                  }
+                  // Append the user's action into chat immediately
+                  setChat(prev => [
+                    ...prev,
+                    { role: 'user', text: `Summarize the following selection:\n\n"""\n${selectedText}\n"""`, at: Date.now() }
+                  ]);
+                  setIsTyping(true);
+                  const res = await fetch(pyApiUrl('/api/summarize'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ selectionText: selectedText, docId })
+                  });
+                  const data = await res.json().catch(()=>({}));
+                  if (!res.ok) throw new Error(data.error || 'Summarization failed');
+                  const summary = (data && data.summary) ? data.summary : 'No summary produced.';
+                  setChat(prev => [
+                    ...prev,
+                    { role: 'assistant', text: summary, at: Date.now() }
+                  ]);
+                } catch (e) {
+                  setChat(prev => [
+                    ...prev,
+                    { role: 'assistant', text: `⚠️ ${e.message || 'Summarization failed'}`, at: Date.now() }
+                  ]);
+                } finally {
+                  setIsTyping(false);
+                }
+              }}
             />
 
             <Chat
