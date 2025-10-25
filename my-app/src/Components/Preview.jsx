@@ -23,6 +23,9 @@ const Preview = ({
   const [toolbarPos, setToolbarPos] = useState({ left: 12, top: 12 });
   const [fadingOut, setFadingOut] = useState(false);
   const [justShown, setJustShown] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [lastEditEnd, setLastEditEnd] = useState(0);
+  const dragStartedInPreview = useRef(false);
 
   // Handle keyboard shortcut for toggling preview panel
   useEffect(() => {
@@ -55,13 +58,32 @@ const Preview = ({
 
   // Show floating summarize toolbar when user selects text within the preview panel
   useEffect(() => {
+    const onMouseDownCapture = (e) => {
+      // track whether selection started inside preview (not inside editor)
+      try {
+        const t = e.target;
+        const inEditor = t && t.closest && t.closest('.txt-editor');
+        dragStartedInPreview.current = !!(previewRef.current && previewRef.current.contains(t) && !inEditor);
+      } catch (_) {
+        dragStartedInPreview.current = false;
+      }
+    };
+
     const onMouseUp = () => {
       try {
-        // If the user is editing text (textarea.txt-editor focused), do not show summarize UI
+        // Suppress while editing or just after leaving editor to avoid flicker
         const ae = document.activeElement;
         if (ae && ae.classList && ae.classList.contains('txt-editor')) {
-            setSelUI({ visible: false, text: "", rect: null });
-            return;
+          setSelUI({ visible: false, text: "", rect: null });
+          return;
+        }
+        if (Date.now() - lastEditEnd < 250) {
+          setSelUI({ visible: false, text: "", rect: null });
+          return;
+        }
+        if (!dragStartedInPreview.current) {
+          setSelUI({ visible: false, text: "", rect: null });
+          return;
         }
         const sel = window.getSelection && window.getSelection();
         const text = sel ? String(sel.toString() || "").trim() : "";
@@ -72,11 +94,10 @@ const Preview = ({
         if (!sel.rangeCount) return;
         const range = sel.getRangeAt(0);
         const rect = range.getBoundingClientRect();
-        // Ensure selection belongs to the preview panel DOM, otherwise ignore (e.g., embedded PDF object)
         const node = range.commonAncestorContainer && (range.commonAncestorContainer.nodeType === 1
           ? range.commonAncestorContainer
           : range.commonAncestorContainer.parentNode);
-        // If selection is inside the text editor, ignore
+        // Ignore if selection is inside the text editor
         try {
           if (node && typeof node.closest === 'function') {
             const inEditor = node.closest('.txt-editor');
@@ -87,7 +108,11 @@ const Preview = ({
           }
         } catch (_) { /* ignore */ }
         if (previewRef.current && node && previewRef.current.contains(node)) {
-          setSelUI({ visible: true, text, rect: { top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height } });
+          setSelUI({
+            visible: true,
+            text,
+            rect: { top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height }
+          });
           setJustShown(true);
           setFadingOut(false);
           setTimeout(() => setJustShown(false), 20);
@@ -96,14 +121,16 @@ const Preview = ({
         }
       } catch (_) {
         setSelUI({ visible: false, text: "", rect: null });
+      } finally {
+        dragStartedInPreview.current = false;
       }
     };
+
     const onScrollOrResize = () => setSelUI(prev => ({ ...prev, visible: false }));
+
     const onMouseDown = (e) => {
       if (!selUI.visible) return;
-      // Inside toolbar => ignore
       if (toolbarRef.current && toolbarRef.current.contains(e.target)) return;
-      // Inside selection rectangle => ignore
       if (selUI.rect) {
         const pad = 3;
         const { left, top, right, bottom } = selUI.rect;
@@ -111,21 +138,45 @@ const Preview = ({
           return;
         }
       }
-      // Outside: close with a small fade-out
       setFadingOut(true);
       setTimeout(() => setSelUI({ visible: false, text: "", rect: null }), 160);
     };
+
+    const onFocusIn = (e) => {
+      try {
+        const t = e.target;
+        if (t && t.classList && t.classList.contains('txt-editor')) {
+          setIsEditing(true);
+        }
+      } catch (_) {}
+    };
+    const onFocusOut = (e) => {
+      try {
+        const t = e.target;
+        if (t && t.classList && t.classList.contains('txt-editor')) {
+          setIsEditing(false);
+          setLastEditEnd(Date.now());
+        }
+      } catch (_) {}
+    };
+
+    document.addEventListener('mousedown', onMouseDownCapture, true);
     document.addEventListener('mouseup', onMouseUp);
     document.addEventListener('mousedown', onMouseDown, true);
+    document.addEventListener('focusin', onFocusIn);
+    document.addEventListener('focusout', onFocusOut);
     window.addEventListener('scroll', onScrollOrResize, true);
     window.addEventListener('resize', onScrollOrResize);
     return () => {
+      document.removeEventListener('mousedown', onMouseDownCapture, true);
       document.removeEventListener('mouseup', onMouseUp);
       document.removeEventListener('mousedown', onMouseDown, true);
+      document.removeEventListener('focusin', onFocusIn);
+      document.removeEventListener('focusout', onFocusOut);
       window.removeEventListener('scroll', onScrollOrResize, true);
       window.removeEventListener('resize', onScrollOrResize);
     };
-  }, [selUI.visible, selUI.rect]);
+  }, [selUI.visible, selUI.rect, lastEditEnd]);
 
   // Recalculate toolbar position when selection changes or toolbar mounts
   useEffect(() => {
