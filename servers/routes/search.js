@@ -4,24 +4,6 @@ const mongoose = require("mongoose");
 const Document = require("../models/Document");
 const DocChunk = require("../models/DocChunk");
 const { verifyToken, ensureActive } = require("./auth");
-// Lazy-loaded spellchecker (nspell + dictionary-en)
-let _spell = null;
-async function getSpell() {
-  if (_spell) return _spell;
-  const nspell = require("nspell");
-  const dictionary = require("dictionary-en");
-  return new Promise((resolve, reject) => {
-    dictionary((err, dict) => {
-      if (err) return reject(err);
-      try {
-        _spell = nspell(dict);
-        resolve(_spell);
-      } catch (e) {
-        reject(e);
-      }
-    });
-  });
-}
 
 // Internal upsert endpoint for Flask to persist chunk texts for keyword/metadata search
 router.post("/internal/chunks/upsert", async (req, res) => {
@@ -128,40 +110,3 @@ router.get("/", verifyToken, ensureActive, async (req, res) => {
 });
 
 module.exports = router;
-
-// Simple spellcheck endpoint: returns whether a word is correct and a few suggestions
-router.get("/spellcheck", verifyToken, ensureActive, async (req, res) => {
-  try {
-    const word = String(req.query.word || "").trim();
-    if (!word || /[^A-Za-z'-]/.test(word) || word.length < 2) {
-      return res.json({ correct: true, suggestions: [] });
-    }
-    const spell = await getSpell();
-    const correct = spell.correct(word);
-    const suggestions = correct ? [] : spell.suggestions(word).slice(0, 5);
-    return res.json({ correct, suggestions });
-  } catch (err) {
-    return res.status(500).json({ message: err?.message || String(err) });
-  }
-});
-
-// Batch spellcheck: { words: string[] } -> { results: { [word]: { correct: boolean, suggestion?: string } } }
-router.post("/spellcheck/batch", verifyToken, ensureActive, async (req, res) => {
-  try {
-    const words = Array.isArray(req.body?.words) ? req.body.words : [];
-    const cleaned = words
-      .map(w => String(w || '').trim())
-      .filter(w => !!w && /^[A-Za-z'\-]{2,}$/.test(w));
-    if (!cleaned.length) return res.json({ results: {} });
-    const unique = Array.from(new Set(cleaned.map(w => w.toLowerCase())));
-    const spell = await getSpell();
-    const results = {};
-    for (const w of unique) {
-      const correct = spell.correct(w);
-      results[w] = correct ? { correct } : { correct, suggestion: (spell.suggestions(w) || [])[0] };
-    }
-    return res.json({ results });
-  } catch (err) {
-    return res.status(500).json({ message: err?.message || String(err) });
-  }
-});

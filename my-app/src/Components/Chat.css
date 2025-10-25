@@ -217,20 +217,6 @@
 }
 
 /* Thumb buttons match copy button styling */
-.spell-suggest-btn {
-  align-self: center;
-  background: #2b6cb0;
-  color: #fff;
-  border: none;
-  padding: 8px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 12px;
-  white-space: nowrap;
-}
-.spell-suggest-btn:hover {
-  background: #2c5282;
-}
 .thumb-button {
   background: transparent;
   border: none;
@@ -297,7 +283,7 @@
 
 .chat-input { 
   flex: 1; 
-  background: transparent; /* allow overlay to show through */
+  background: rgba(255, 255, 255, 0.05);
   color: #e2e8f0; 
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px; 
@@ -313,32 +299,6 @@
   overflow-y: auto; 
   resize: none; 
 }
-.chat-input-wrap { position: relative; flex: 1; }
-.spell-overlay {
-  position: absolute;
-  inset: 0;
-  padding: 14px 18px;
-  border-radius: 12px;
-  color: transparent; /* we only want underlines visible; text sits below textarea */
-  font-size: 0.95rem;
-  font-family: inherit; /* mirror textarea font for alignment */
-  line-height: 1.4;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  pointer-events: none; /* allow typing through except underlines */
-  z-index: 2; /* above textarea for click on underlines */
-}
-.spell-overlay .miss {
-  text-decoration: underline wavy #ff4d4f;
-  text-decoration-color: #ff4d4f;
-  text-decoration-thickness: 1.5px;
-  text-underline-offset: 3px; /* help visibility on dark backgrounds */
-  text-decoration-skip-ink: none; /* ensure underline isn't skipped */
-  color: transparent; /* keep overlay text invisible */
-  -webkit-text-fill-color: transparent; /* ensure text hidden while decoration visible */
-  pointer-events: auto; /* clickable for correction */
-}
-.chat-input-wrap .chat-input { position: relative; z-index: 1; }
 
 .chat-input::-webkit-scrollbar {
   width: 6px;

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import "./Chat.css";
 import Lottie from "lottie-react";
 import display from "../Animations/Chat-D.json"
@@ -113,126 +113,12 @@ const Chat = ({ chat, setChat, chatInput, setChatInput, sendMessage, clearChat, 
   }, [chatInput]);
 
   // Handle input change with validation
-  // Spelling suggestion state
-  const [missWord, setMissWord] = useState(null); // caret-based suggestion chip
-  const [lastChecked, setLastChecked] = useState({ word: '', ts: 0 });
-  const [spellMap, setSpellMap] = useState({}); // { [wordLower]: { correct, suggestion? } }
-
-  const fetchSuggestion = async (word) => {
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(apiUrl(`/api/search/spellcheck?word=${encodeURIComponent(word)}`), {
-        headers: { Authorization: token ? `Bearer ${token}` : '' }
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.message || 'Spellcheck failed');
-      if (data && data.correct === false && Array.isArray(data.suggestions) && data.suggestions.length) {
-        setMissWord((prev) => ({ ...(prev || {}), word, suggestion: data.suggestions[0] }));
-      } else {
-        setMissWord(null);
-      }
-    } catch (_) {
-      // Silent fail
-      setMissWord(null);
-    }
-  };
-
-  // Batch spellcheck for overlay
-  const batchCheck = async (words) => {
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(apiUrl(`/api/search/spellcheck/batch`), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: token ? `Bearer ${token}` : ''
-        },
-        body: JSON.stringify({ words })
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.message || 'Spellcheck failed');
-      setSpellMap(data?.results || {});
-    } catch (_) {
-      setSpellMap({});
-    }
-  };
-
-  const getWordAtCaret = (value, caret) => {
-    // Find token boundaries around caret in textarea value
-    let start = caret;
-    let end = caret;
-    const isWordChar = (ch) => /[A-Za-z'\-]/.test(ch || '');
-    while (start > 0 && isWordChar(value[start - 1])) start--;
-    while (end < value.length && isWordChar(value[end])) end++;
-    const word = value.slice(start, end);
-    return { word, start, end };
-  };
-
   const handleInputChange = (e) => {
     const value = e.target.value;
     if (value.length <= 750) {
       setChatInput(value);
-      // Debounced batch spellcheck on current tokens
-      const tokens = Array.from(new Set((value.match(/[A-Za-z'-]{3,}/g) || []).map(w => w.toLowerCase())));
-      if (tokens.length) {
-        const now = Date.now();
-        // naive debounce via timeout
-        clearTimeout(handleInputChange._t);
-        handleInputChange._t = setTimeout(() => batchCheck(tokens), 250);
-      } else {
-        setSpellMap({});
-      }
-      // Real-time: check word at caret when user types space or ends a word
-      const caret = e.target.selectionStart || value.length;
-      const { word, start, end } = getWordAtCaret(value, caret - 1);
-      if (word && word.length >= 3) {
-        setMissWord({ word, start, end, suggestion: null });
-        const now = Date.now();
-        if (lastChecked.word !== word || now - lastChecked.ts > 800) {
-          setLastChecked({ word, ts: now });
-          fetchSuggestion(word);
-        }
-      } else {
-        setMissWord(null);
-      }
     }
   };
-
-  // Build overlay HTML with underlines for misspelled words (clickable)
-  const overlayHtml = useMemo(() => {
-    if (!chatInput) return "";
-    let html = "";
-    // Iterate through text and wrap tokens
-    const re = /[A-Za-z'-]{1,}|[^A-Za-z'-]+/g;
-    let m;
-    let idx = 0;
-    while ((m = re.exec(chatInput)) !== null) {
-      const segment = m[0];
-      const start = idx;
-      const end = idx + segment.length;
-      idx = end;
-      if (/^[A-Za-z'-]{1,}$/.test(segment)) {
-        const low = segment.toLowerCase();
-        const info = spellMap[low];
-        // Underline all incorrect words, even if no suggestion is available
-        if (info && info.correct === false) {
-          const sugAttr = (info.suggestion ? ` data-suggest="${info.suggestion}"` : "");
-          html += `<span class="miss" data-start="${start}" data-end="${end}" data-word="${segment}"${sugAttr}>${segment}</span>`;
-        } else {
-          html += segment;
-        }
-      } else {
-        // Preserve spaces/newlines
-        html += segment
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')
-          .replace(/\n/g, '<br/>')
-          .replace(/ {2}/g, ' &nbsp;');
-      }
-    }
-    return html;
-  }, [chatInput, spellMap]);
 
   // Handle key press events
   const handleKeyDown = (e) => {
@@ -413,58 +299,16 @@ const Chat = ({ chat, setChat, chatInput, setChatInput, sendMessage, clearChat, 
         )}
       </div>
       <div className="chat-input-row">
-        <div className="chat-input-wrap">
-          <div
-            className="spell-overlay"
-            onClick={(e) => {
-              const t = e.target;
-              if (t && t.classList && t.classList.contains('miss')) {
-                const s = parseInt(t.getAttribute('data-start') || '0', 10);
-                const en = parseInt(t.getAttribute('data-end') || '0', 10);
-                const sug = t.getAttribute('data-suggest') || '';
-                if (!isNaN(s) && !isNaN(en) && sug) {
-                  const before = chatInput.slice(0, s);
-                  const after = chatInput.slice(en);
-                  const next = `${before}${sug}${after}`;
-                  setChatInput(next);
-                  setMissWord(null);
-                  setTimeout(() => textareaRef.current?.focus(), 0);
-                }
-              }
-            }}
-            dangerouslySetInnerHTML={{ __html: overlayHtml }}
-          />
-          <textarea
+        <textarea
           ref={textareaRef}
           className="chat-input"
           placeholder="Type your question..."
           value={chatInput}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
-          spellCheck={true}
           maxLength={750}
           rows={1}
-          />
-        </div>
-        {missWord && missWord.suggestion && (
-          <button
-            className="spell-suggest-btn"
-            type="button"
-            onClick={() => {
-              // Replace the misspelled word range with suggestion
-              const before = chatInput.slice(0, missWord.start);
-              const after = chatInput.slice(missWord.end);
-              const next = `${before}${missWord.suggestion}${after}`;
-              setChatInput(next);
-              setMissWord(null);
-              // Restore focus
-              setTimeout(() => textareaRef.current?.focus(), 0);
-            }}
-            title={`Replace "${missWord.word}" with "${missWord.suggestion}"`}
-          >
-            Fix "{missWord.word}" → "{missWord.suggestion}"
-          </button>
-        )}
+        />
         <button
           className="chat-send"
           onClick={sendMessage}
