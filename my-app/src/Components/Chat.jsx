@@ -5,7 +5,7 @@ import display from "../Animations/Chat-D.json"
 import { useToast } from "./ToastContext";
 import Quiz from "./Quiz";
 import Flashcard from "./Flashcard";
-import { apiUrl } from "../config";
+import { apiUrl, pyApiUrl } from "../config";
 
 const TypingIndicator = () => (
   <div className="typing-indicator">
