@@ -18,6 +18,7 @@ const Preview = ({
   onSummarizeSelection,
 }) => {
   const previewRef = useRef(null);
+  const [selUI, setSelUI] = useState({ visible: false, text: "", rect: null });
 
   // Handle keyboard shortcut for toggling preview panel
   useEffect(() => {
@@ -48,6 +49,43 @@ const Preview = ({
     }
   };
 
+  // Show floating summarize toolbar when user selects text within the preview panel
+  useEffect(() => {
+    const onMouseUp = () => {
+      try {
+        const sel = window.getSelection && window.getSelection();
+        const text = sel ? String(sel.toString() || "").trim() : "";
+        if (!text) {
+          setSelUI({ visible: false, text: "", rect: null });
+          return;
+        }
+        if (!sel.rangeCount) return;
+        const range = sel.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        // Ensure selection belongs to the preview panel DOM, otherwise ignore (e.g., embedded PDF object)
+        const node = range.commonAncestorContainer && (range.commonAncestorContainer.nodeType === 1
+          ? range.commonAncestorContainer
+          : range.commonAncestorContainer.parentNode);
+        if (previewRef.current && node && previewRef.current.contains(node)) {
+          setSelUI({ visible: true, text, rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height } });
+        } else {
+          setSelUI({ visible: false, text: "", rect: null });
+        }
+      } catch (_) {
+        setSelUI({ visible: false, text: "", rect: null });
+      }
+    };
+    const onScrollOrResize = () => setSelUI(prev => ({ ...prev, visible: false }));
+    document.addEventListener('mouseup', onMouseUp);
+    window.addEventListener('scroll', onScrollOrResize, true);
+    window.addEventListener('resize', onScrollOrResize);
+    return () => {
+      document.removeEventListener('mouseup', onMouseUp);
+      window.removeEventListener('scroll', onScrollOrResize, true);
+      window.removeEventListener('resize', onScrollOrResize);
+    };
+  }, []);
+
   return (
     <div
       className={`preview-section ${isOpen ? "open" : "closed"}`}
@@ -65,24 +103,6 @@ const Preview = ({
         >
           📰
         </button>
-        {isOpen && (
-          <button
-            className="preview-action summarize-btn"
-            title="Summarize selected text"
-            onClick={() => {
-              try {
-                const sel = window.getSelection && window.getSelection();
-                const txt = sel ? String(sel.toString() || "").trim() : "";
-                onSummarizeSelection && onSummarizeSelection(txt);
-              } catch (_) {
-                onSummarizeSelection && onSummarizeSelection("");
-              }
-            }}
-            style={{ marginLeft: 8 }}
-          >
-            Summarize Selection
-          </button>
-        )}
       </div>
 
       {isOpen && (
@@ -99,6 +119,51 @@ const Preview = ({
             <EmptyPreview />
           )}
         </div>
+      )}
+
+      {/* Floating summarize toolbar and selection rectangle (positioned in viewport coordinates) */}
+      {selUI.visible && selUI.rect && (
+        <>
+          <div
+            className="selection-rect"
+            style={{
+              position: 'fixed',
+              zIndex: 1000,
+              left: selUI.rect.left - 2,
+              top: selUI.rect.top - 2,
+              width: Math.max(0, selUI.rect.width + 4),
+              height: Math.max(0, selUI.rect.height + 4),
+              pointerEvents: 'none'
+            }}
+          />
+          <div
+            className="selection-toolbar"
+            style={{
+              position: 'fixed',
+              zIndex: 1001,
+              left: Math.max(8, Math.min(window.innerWidth - 180, selUI.rect.left)),
+              top: Math.max(8, selUI.rect.top - 42)
+            }}
+          >
+            <button
+              className="summarize-mini"
+              onClick={() => {
+                onSummarizeSelection && onSummarizeSelection(selUI.text);
+                setSelUI({ visible: false, text: "", rect: null });
+              }}
+              title="Summarize selection and send to chat"
+            >
+              Summarize
+            </button>
+            <button
+              className="close-mini"
+              onClick={() => setSelUI({ visible: false, text: "", rect: null })}
+              title="Close"
+            >
+              ×
+            </button>
+          </div>
+        </>
       )}
     </div>
   );

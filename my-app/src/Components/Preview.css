@@ -205,6 +205,53 @@
   border-color: rgba(255, 255, 255, 0.2);
 }
 
+/* Selection UI (floating toolbar) */
+.selection-rect {
+  border: 2px dashed #a78bfa; /* purple */
+  border-radius: 6px;
+  box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.15);
+  pointer-events: none;
+}
+
+.selection-toolbar {
+  background: rgba(10,10,10,0.95);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  padding: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+}
+
+.selection-toolbar .summarize-mini {
+  background: linear-gradient(180deg, #4338ca 0%, #4f46e5 100%);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.selection-toolbar .summarize-mini:hover {
+  filter: brightness(1.05);
+}
+
+.selection-toolbar .close-mini {
+  background: transparent;
+  color: #aaa;
+  border: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.selection-toolbar .close-mini:hover {
+  background: rgba(255,255,255,0.08);
+}
+
 /* Collapsed State */
 .preview-section.closed {
   width: 60px !important;
