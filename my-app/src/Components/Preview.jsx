@@ -21,6 +21,8 @@ const Preview = ({
   const [selUI, setSelUI] = useState({ visible: false, text: "", rect: null });
   const toolbarRef = useRef(null);
   const [toolbarPos, setToolbarPos] = useState({ left: 12, top: 12 });
+  const [fadingOut, setFadingOut] = useState(false);
+  const [justShown, setJustShown] = useState(false);
 
   // Handle keyboard shortcut for toggling preview panel
   useEffect(() => {
@@ -55,6 +57,12 @@ const Preview = ({
   useEffect(() => {
     const onMouseUp = () => {
       try {
+        // If the user is editing text (textarea.txt-editor focused), do not show summarize UI
+        const ae = document.activeElement;
+        if (ae && ae.classList && ae.classList.contains('txt-editor')) {
+            setSelUI({ visible: false, text: "", rect: null });
+            return;
+        }
         const sel = window.getSelection && window.getSelection();
         const text = sel ? String(sel.toString() || "").trim() : "";
         if (!text) {
@@ -68,8 +76,21 @@ const Preview = ({
         const node = range.commonAncestorContainer && (range.commonAncestorContainer.nodeType === 1
           ? range.commonAncestorContainer
           : range.commonAncestorContainer.parentNode);
+        // If selection is inside the text editor, ignore
+        try {
+          if (node && typeof node.closest === 'function') {
+            const inEditor = node.closest('.txt-editor');
+            if (inEditor) {
+              setSelUI({ visible: false, text: "", rect: null });
+              return;
+            }
+          }
+        } catch (_) { /* ignore */ }
         if (previewRef.current && node && previewRef.current.contains(node)) {
-          setSelUI({ visible: true, text, rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height } });
+          setSelUI({ visible: true, text, rect: { top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height } });
+          setJustShown(true);
+          setFadingOut(false);
+          setTimeout(() => setJustShown(false), 20);
         } else {
           setSelUI({ visible: false, text: "", rect: null });
         }
@@ -78,15 +99,33 @@ const Preview = ({
       }
     };
     const onScrollOrResize = () => setSelUI(prev => ({ ...prev, visible: false }));
+    const onMouseDown = (e) => {
+      if (!selUI.visible) return;
+      // Inside toolbar => ignore
+      if (toolbarRef.current && toolbarRef.current.contains(e.target)) return;
+      // Inside selection rectangle => ignore
+      if (selUI.rect) {
+        const pad = 3;
+        const { left, top, right, bottom } = selUI.rect;
+        if (e.clientX >= left - pad && e.clientX <= right + pad && e.clientY >= top - pad && e.clientY <= bottom + pad) {
+          return;
+        }
+      }
+      // Outside: close with a small fade-out
+      setFadingOut(true);
+      setTimeout(() => setSelUI({ visible: false, text: "", rect: null }), 160);
+    };
     document.addEventListener('mouseup', onMouseUp);
+    document.addEventListener('mousedown', onMouseDown, true);
     window.addEventListener('scroll', onScrollOrResize, true);
     window.addEventListener('resize', onScrollOrResize);
     return () => {
       document.removeEventListener('mouseup', onMouseUp);
+      document.removeEventListener('mousedown', onMouseDown, true);
       window.removeEventListener('scroll', onScrollOrResize, true);
       window.removeEventListener('resize', onScrollOrResize);
     };
-  }, []);
+  }, [selUI.visible, selUI.rect]);
 
   // Recalculate toolbar position when selection changes or toolbar mounts
   useEffect(() => {
@@ -150,11 +189,13 @@ const Preview = ({
               top: selUI.rect.top - 2,
               width: Math.max(0, selUI.rect.width + 4),
               height: Math.max(0, selUI.rect.height + 4),
-              pointerEvents: 'none'
+              pointerEvents: 'none',
+              opacity: fadingOut ? 0 : 1,
+              transition: 'opacity 150ms ease'
             }}
           />
           <div
-            className="selection-toolbar"
+            className={`selection-toolbar ${justShown ? 'enter' : ''} ${fadingOut ? 'leave' : ''}`}
             style={{
               position: 'fixed',
               zIndex: 1001,
@@ -167,7 +208,12 @@ const Preview = ({
               className="summarize-mini"
               onClick={() => {
                 onSummarizeSelection && onSummarizeSelection(selUI.text);
-                setSelUI({ visible: false, text: "", rect: null });
+                setFadingOut(true);
+                setTimeout(() => setSelUI({ visible: false, text: "", rect: null }), 160);
+                try {
+                  const s = window.getSelection && window.getSelection();
+                  if (s && s.removeAllRanges) s.removeAllRanges();
+                } catch (_) { /* ignore */ }
               }}
               title="Summarize selection and send to chat"
             >
@@ -175,7 +221,10 @@ const Preview = ({
             </button>
             <button
               className="close-mini"
-              onClick={() => setSelUI({ visible: false, text: "", rect: null })}
+              onClick={() => {
+                setFadingOut(true);
+                setTimeout(() => setSelUI({ visible: false, text: "", rect: null }), 160);
+              }}
               title="Close"
             >
               ×
