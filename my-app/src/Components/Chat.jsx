@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./Chat.css";
 import Lottie from "lottie-react";
 import display from "../Animations/Chat-D.json"
@@ -19,6 +19,8 @@ const Chat = ({ chat, setChat, chatInput, setChatInput, sendMessage, clearChat, 
   const { showToast } = useToast();
   const chatEndRef = useRef(null);
   const textareaRef = useRef(null);
+  const overlayRef = useRef(null);
+  const [scrollTop, setScrollTop] = useState(0);
   const [feedbackMap, setFeedbackMap] = useState({}); // { [messageKey]: 'up' | 'down' }
   const [showQuiz, setShowQuiz] = useState(false);
   const [showFlashcards, setShowFlashcards] = useState(false);
@@ -112,6 +114,88 @@ const Chat = ({ chat, setChat, chatInput, setChatInput, sendMessage, clearChat, 
     }
   }, [chatInput]);
 
+  // Keep overlay aligned with textarea vertical scroll
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const onScroll = () => setScrollTop(el.scrollTop || 0);
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // Spellcheck state and batch checker
+  const [spellMap, setSpellMap] = useState({}); // { wordLower: { correct:boolean } }
+  const batchCheck = async (words) => {
+    try {
+      const token = localStorage.getItem("token");
+      // Try Node first
+      let res = await fetch(apiUrl(`/api/search/spellcheck/batch`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: token ? `Bearer ${token}` : ''
+        },
+        body: JSON.stringify({ words })
+      });
+      let data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        // Fallback to Flask
+        res = await fetch(pyApiUrl(`/api/spellcheck/batch`), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ words })
+        });
+        data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.message || 'Spellcheck failed');
+      }
+      setSpellMap(data?.results || {});
+    } catch (_) {
+      setSpellMap({});
+    }
+  };
+
+  // Debounce spellcheck on input
+  useEffect(() => {
+    const value = chatInput || '';
+    const tokens = Array.from(new Set((value.match(/[A-Za-z'-]{3,}/g) || []).map(w => w.toLowerCase())));
+    if (!tokens.length) { setSpellMap({}); return; }
+    const t = setTimeout(() => batchCheck(tokens), 250);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatInput]);
+
+  // Build overlay HTML with underlines
+  const overlayHtml = useMemo(() => {
+    const text = chatInput || '';
+    if (!text) return '';
+    let html = '';
+    const re = /[A-Za-z'-]{1,}|[^A-Za-z'-]+/g;
+    let m, idx = 0;
+    while ((m = re.exec(text)) !== null) {
+      const seg = m[0];
+      const start = idx;
+      const end = idx + seg.length;
+      idx = end;
+      if (/^[A-Za-z'-]+$/.test(seg)) {
+        const low = seg.toLowerCase();
+        const info = spellMap[low];
+        if (info && info.correct === false) {
+          html += `<span class="miss" data-start="${start}" data-end="${end}">${seg}</span>`;
+        } else {
+          html += seg;
+        }
+      } else {
+        html += seg
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/\n/g, '<br/>')
+          .replace(/ {2}/g, ' &nbsp;');
+      }
+    }
+    return html;
+  }, [chatInput, spellMap]);
+
   // Handle input change with validation
   const handleInputChange = (e) => {
     const value = e.target.value;
@@ -150,15 +234,13 @@ const Chat = ({ chat, setChat, chatInput, setChatInput, sendMessage, clearChat, 
     let nextMap;
     let rating = 'none';
     if (current === type) {
-      // Toggle off
-      nextMap = (prev) => { const { [key]: _, ...rest } = prev; return rest; };
+      nextMap = (prev) => { const { [key]: _omit, ...rest } = prev; return rest; };
       rating = 'none';
     } else {
       nextMap = (prev) => ({ ...prev, [key]: type });
       rating = type === 'up' ? 'positive' : 'negative';
       showToast("Thanks for your feedback", { type: "success" });
     }
-    // Optimistic update with revert if needed
     const prevState = feedbackMap;
     setFeedbackMap(typeof nextMap === 'function' ? nextMap : nextMap);
     saveFeedback(idx, rating, () => setFeedbackMap(prevState));
@@ -299,16 +381,25 @@ const Chat = ({ chat, setChat, chatInput, setChatInput, sendMessage, clearChat, 
         )}
       </div>
       <div className="chat-input-row">
-        <textarea
-          ref={textareaRef}
-          className="chat-input"
-          placeholder="Type your question..."
-          value={chatInput}
-          onChange={handleInputChange}
-          onKeyDown={handleKeyDown}
-          maxLength={750}
-          rows={1}
-        />
+        <div className="chat-input-wrap">
+          <div className="spell-overlay" ref={overlayRef}>
+            <div
+              className="spell-overlay-content"
+              style={{ transform: `translateY(-${scrollTop}px)` }}
+              dangerouslySetInnerHTML={{ __html: overlayHtml }}
+            />
+          </div>
+          <textarea
+            ref={textareaRef}
+            className="chat-input"
+            placeholder="Type your question..."
+            value={chatInput}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            maxLength={750}
+            rows={1}
+          />
+        </div>
         <button
           className="chat-send"
           onClick={sendMessage}
