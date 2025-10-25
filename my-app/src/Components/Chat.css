@@ -300,35 +300,6 @@
   resize: none; 
 }
 
-.chat-input-wrap { position: relative; flex: 1; }
-.spell-overlay {
-  position: absolute;
-  inset: 0;
-  padding: 14px 18px;
-  border-radius: 12px;
-  color: transparent; /* we only want underlines visible; text sits below textarea */
-  font-size: 0.95rem;
-  font-family: inherit; /* mirror textarea font for alignment */
-  line-height: 1.4;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  overflow: hidden; /* hide overflow when textarea scrolls */
-  pointer-events: none; /* clicks go through unless on miss */
-  z-index: 2;
-}
-.spell-overlay-content { will-change: transform; }
-.spell-overlay .miss {
-  text-decoration: underline wavy #ff4d4f;
-  text-decoration-color: #ff4d4f;
-  text-decoration-thickness: 1.5px;
-  text-underline-offset: 3px;
-  text-decoration-skip-ink: none;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-  pointer-events: auto; /* enable clicking underlined word if we add suggestions later */
-}
-.chat-input-wrap .chat-input { position: relative; z-index: 1; }
-
 .chat-input::-webkit-scrollbar {
   width: 6px;
 }
@@ -346,36 +317,6 @@
   background: rgba(0,0,0,0.1);
   border-radius: 6px;
 }
-
-/* Overlay for spell underlines (non-intrusive: doesn't alter layout) */
-.chat-input-wrap { position: relative; flex: 1; }
-.spell-overlay {
-  position: absolute;
-  inset: 0;
-  padding: 14px 18px; /* match textarea padding for alignment */
-  border-radius: 12px; /* match textarea radius */
-  color: transparent; /* show only decoration */
-  font-size: 0.95rem; /* match textarea font size */
-  font-family: inherit;
-  line-height: 1.4;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  overflow: hidden;
-  pointer-events: none; /* let clicks go to textarea */
-  z-index: 2;
-}
-.spell-overlay-content { will-change: transform; }
-.spell-overlay .miss {
-  text-decoration: underline wavy #ff4d4f;
-  text-decoration-color: #ff4d4f;
-  text-decoration-thickness: 1.5px;
-  text-underline-offset: 3px;
-  text-decoration-skip-ink: none;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-  pointer-events: auto; /* clickable if we add suggestions */
-}
-.chat-input-wrap .chat-input { position: relative; z-index: 1; }
 
 .chat-input:focus { 
   border-color: rgba(79, 70, 229, 0.5);

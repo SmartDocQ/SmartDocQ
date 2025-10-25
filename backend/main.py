@@ -15,24 +15,9 @@ import concurrent.futures
 import threading
 profanity.load_censor_words()
 import re
-from spellchecker import SpellChecker
 
 # Cache for converted PDFs (in production, use Redis or file-based cache)
 pdf_cache = {}
-_spell_lock = threading.Lock()
-_spell_checker = None
-
-def get_spellchecker():
-    global _spell_checker
-    if _spell_checker is None:
-        with _spell_lock:
-            if _spell_checker is None:
-                try:
-                    _spell_checker = SpellChecker(language='en')
-                except Exception as e:
-                    print("[Spell] init error:", e)
-                    _spell_checker = None
-    return _spell_checker
 
 # ====== CONFIG ======
 app = Flask(__name__)
@@ -366,67 +351,6 @@ def generate_embeddings(text, timeout_sec: int = 20):
 @app.route("/healthz", methods=["GET"]) 
 def healthz():
     return jsonify({"status": "ok"})
-
-# ---- SPELLCHECK (Flask fallback) ----
-@app.route("/api/spellcheck", methods=["GET"])
-def spellcheck_single():
-    word = (request.args.get("word") or "").strip()
-    if not word or not re.match(r"^[A-Za-z'\-]{2,}$", word):
-        return jsonify({"correct": True, "suggestions": []})
-    sp = get_spellchecker()
-    if not sp:
-        return jsonify({"correct": True, "suggestions": []})
-    low = word.lower()
-    is_correct = low not in sp.unknown([low])
-    if is_correct:
-        return jsonify({"correct": True, "suggestions": []})
-    try:
-        # best guess
-        best = sp.correction(low)
-        # a few candidates including best
-        cands = list(sp.candidates(low))
-        # move best to front and limit
-        if best in cands:
-            cands.remove(best)
-        suggestions = [best] + cands[:4]
-    except Exception:
-        suggestions = []
-    return jsonify({"correct": False, "suggestions": suggestions})
-
-@app.route("/api/spellcheck/batch", methods=["POST"])
-def spellcheck_batch():
-    body = request.get_json(silent=True) or {}
-    words = body.get("words") or []
-    if not isinstance(words, list):
-        words = []
-    cleaned = []
-    for w in words:
-        try:
-            s = str(w or "").strip()
-            if s and re.match(r"^[A-Za-z'\-]{2,}$", s):
-                cleaned.append(s.lower())
-        except Exception:
-            continue
-    cleaned = list(dict.fromkeys(cleaned))  # dedupe, preserve order
-    if not cleaned:
-        return jsonify({"results": {}})
-    sp = get_spellchecker()
-    if not sp:
-        return jsonify({"results": {}})
-    unknown = sp.unknown(cleaned)
-    results = {}
-    for w in cleaned:
-        if w in unknown:
-            try:
-                best = sp.correction(w)
-            except Exception:
-                best = None
-            results[w] = {"correct": False}
-            if best:
-                results[w]["suggestion"] = best
-        else:
-            results[w] = {"correct": True}
-    return jsonify({"results": results})
 
 # ---- ROOT ----
 @app.route("/", methods=["GET", "HEAD"]) 
