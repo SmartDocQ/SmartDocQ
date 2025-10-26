@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+// PDF rendering powered by pdf.js via react-pdf so selections live in our DOM (enables toolbar)
+import { Document as PdfDocument, Page, pdfjs } from "react-pdf";
 import { useToast } from "./ToastContext";
 import { apiUrl } from "../config";
 import "./Preview.css";
@@ -298,20 +300,7 @@ function PreviewRenderer({ file, fileUrl, documentId, filename, onTextSaved }) {
 
   // PDF preview
   if (type === "application/pdf" || extension === "pdf") {
-    return (
-      <div className="pdf-preview">
-        <div className="pdf-frame-wrapper">
-          <object data={fileUrl} type="application/pdf" className="pdf-frame">
-            <div className="preview-fallback">
-              <p>PDF preview not supported.</p>
-              <a href={fileUrl} target="_blank" rel="noreferrer" className="fallback-link">
-                Open in new tab
-              </a>
-            </div>
-          </object>
-        </div>
-      </div>
-    );
+    return <PdfPreview fileUrl={fileUrl} />;
   }
 
   // Text preview
@@ -344,6 +333,67 @@ function PreviewRenderer({ file, fileUrl, documentId, filename, onTextSaved }) {
       <div className="fallback-icon">📄</div>
       <p>Preview not available</p>
       <p className="fallback-subtitle">For this file type</p>
+    </div>
+  );
+}
+
+// Lightweight PDF viewer using react-pdf (pdf.js)
+function PdfPreview({ fileUrl }) {
+  const [numPages, setNumPages] = useState(null);
+  const [containerWidth, setContainerWidth] = useState(600);
+  const wrapRef = useRef(null);
+
+  // Ensure pdf.js worker is available (fallback to CDN if bundler doesn't provide it)
+  useEffect(() => {
+    try {
+      if (!pdfjs.GlobalWorkerOptions.workerSrc) {
+        pdfjs.GlobalWorkerOptions.workerSrc =
+          "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.worker.min.js";
+      }
+    } catch (_) {}
+  }, []);
+
+  useEffect(() => {
+    const update = () => {
+      const w = wrapRef.current?.clientWidth || 600;
+      setContainerWidth(Math.max(320, Math.min(1200, w - 24)));
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    if (wrapRef.current) ro.observe(wrapRef.current);
+    window.addEventListener("resize", update);
+    return () => {
+      try { ro.disconnect(); } catch (_) {}
+      window.removeEventListener("resize", update);
+    };
+  }, []);
+
+  return (
+    <div className="pdf-preview">
+      <div className="pdf-scroll" ref={wrapRef}>
+        <PdfDocument
+          file={fileUrl}
+          onLoadSuccess={({ numPages }) => setNumPages(numPages)}
+          loading={<div className="preview-loading"><div className="loading-spinner"></div><p>Loading PDF…</p></div>}
+          error={
+            <div className="preview-fallback">
+              <p>Failed to load PDF.</p>
+              <a href={fileUrl} target="_blank" rel="noreferrer" className="fallback-link">Open in new tab</a>
+            </div>
+          }
+        >
+          {Array.from(new Array(numPages || 0), (_, i) => (
+            <div key={i} className="pdf-page">
+              <Page
+                pageNumber={i + 1}
+                width={containerWidth}
+                renderTextLayer
+                renderAnnotationLayer={false}
+              />
+            </div>
+          ))}
+        </PdfDocument>
+      </div>
     </div>
   );
 }
