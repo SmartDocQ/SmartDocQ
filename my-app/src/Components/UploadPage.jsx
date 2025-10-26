@@ -753,9 +753,11 @@ const sendMessage = async () => {
                     return;
                   }
                   // Append the user's action into chat immediately
+                  const userMsgText = `Summarize the following selection:\n\n"""\n${selectedText}\n"""`;
+                  const userAt = Date.now();
                   setChat(prev => [
                     ...prev,
-                    { role: 'user', text: `Summarize the following selection:\n\n"""\n${selectedText}\n"""`, at: Date.now() }
+                    { role: 'user', text: userMsgText, at: userAt }
                   ]);
                   setIsTyping(true);
                   const res = await fetch(pyApiUrl('/api/summarize'), {
@@ -766,10 +768,34 @@ const sendMessage = async () => {
                   const data = await res.json().catch(()=>({}));
                   if (!res.ok) throw new Error(data.error || 'Summarization failed');
                   const summary = (data && data.summary) ? data.summary : 'No summary produced.';
+                  const asstAt = Date.now();
                   setChat(prev => [
                     ...prev,
-                    { role: 'assistant', text: summary, at: Date.now() }
+                    { role: 'assistant', text: summary, at: asstAt }
                   ]);
+
+                  // Persist both messages to chat history on the Node backend
+                  if (docId) {
+                    try {
+                      const token = localStorage.getItem('token');
+                      await fetch(apiUrl(`/api/chat/${docId}/append`), {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          Authorization: token ? `Bearer ${token}` : ''
+                        },
+                        body: JSON.stringify({
+                          messages: [
+                            { role: 'user', text: userMsgText, at: userAt },
+                            { role: 'assistant', text: summary, at: asstAt, rating: 'none' }
+                          ]
+                        })
+                      });
+                    } catch (persistErr) {
+                      console.warn('Failed to persist summarize messages:', persistErr);
+                      // Non-blocking: UI already updated; user can continue
+                    }
+                  }
                 } catch (e) {
                   setChat(prev => [
                     ...prev,

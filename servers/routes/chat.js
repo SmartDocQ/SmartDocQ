@@ -79,6 +79,47 @@ router.post("/:documentId/message", verifyToken, ensureActive, async (req, res) 
   }
 });
 
+// Append provided messages to chat (used for summarize flow where assistant text is already computed)
+router.post("/:documentId/append", verifyToken, ensureActive, async (req, res) => {
+  try {
+    const { documentId } = req.params;
+    const { messages } = req.body;
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ message: "messages must be a non-empty array" });
+    }
+
+    // Basic validation for roles and text
+    const allowedRoles = new Set(["user", "assistant", "system"]);
+    for (const m of messages) {
+      if (!m || typeof m.text !== 'string' || !allowedRoles.has(m.role)) {
+        return res.status(400).json({ message: "Invalid message in array" });
+      }
+    }
+
+    const doc = await Document.findOne({ _id: documentId, user: req.userId });
+    if (!doc) return res.status(404).json({ message: "Document not found" });
+
+    // Normalize messages: ensure 'at' and default rating for assistant
+    const now = new Date();
+    const toAppend = messages.map(m => ({
+      role: m.role,
+      text: m.text,
+      at: m.at ? new Date(m.at) : now,
+      rating: m.role === 'assistant' ? (m.rating || 'none') : undefined,
+    }));
+
+    const chat = await Chat.findOneAndUpdate(
+      { user: req.userId, document: documentId },
+      { $push: { messages: { $each: toAppend } } },
+      { upsert: true, new: true }
+    );
+
+    res.json({ messages: chat.messages, appended: toAppend });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // Overwrite entire chat (optional)
 router.put("/:documentId", verifyToken, ensureActive, async (req, res) => {
   try {
