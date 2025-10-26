@@ -4,11 +4,9 @@ import { useToast } from "./ToastContext";
 import { apiUrl } from "../config";
 import "./Preview.css";
 
-// Configure pdf.js worker using local package to avoid CDN issues
+// Configure pdf.js worker from CDN to avoid bundler path issues during build
 try {
-  // Webpack 5 (CRA) supports import.meta.url; this resolves to a local asset URL
-  // Ensures the worker loads even without internet/CDN access
-  pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.js', import.meta.url).toString();
+  pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 } catch (_) { /* ignore */ }
 
 const Preview = ({
