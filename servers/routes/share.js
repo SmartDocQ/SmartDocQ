@@ -51,17 +51,22 @@ router.post("/chat/:documentId", verifyToken, ensureActive, async (req, res) => 
   }
 });
 
-// Public: resolve a shareId and return snapshot
+// Public: resolve a shareId and return snapshot (honors expiration)
 router.get("/:shareId", async (req, res) => {
   try {
     const { shareId } = req.params;
     const snap = await SharedChat.findOne({ shareId }).populate("document", "name");
     if (!snap) return res.status(404).json({ message: "Share not found" });
+    // Explicit expiration check in case TTL hasn't pruned yet
+    if (snap.expiresAt && snap.expiresAt.getTime() <= Date.now()) {
+      return res.status(410).json({ message: "Share link expired" });
+    }
 
     // Minimal payload; do not expose user id
     res.json({
       shareId: snap.shareId,
       createdAt: snap.createdAt,
+      expiresAt: snap.expiresAt,
       title: snap.title || (snap.document && snap.document.name) || "Shared chat",
       messages: snap.messages || [],
     });

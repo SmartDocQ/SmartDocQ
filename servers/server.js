@@ -83,6 +83,7 @@ mongoose.connection.once("open", async () => {
   try {
     const Document = require("./models/Document");
     const DocChunk = require("./models/DocChunk");
+    const SharedChat = require("./models/SharedChat");
     // Backfill missing doc_id values
     await Document.updateMany({ doc_id: { $in: [null, ""] } }, [ { $set: { doc_id: { $toString: "$_id" } } } ]).catch(()=>{});
     // Create unique index on doc_id
@@ -95,9 +96,28 @@ mongoose.connection.once("open", async () => {
     // Text index for fallback search (Atlas Search recommended for production)
     try { await DocChunk.collection.createIndex({ text: "text" }); } catch(_){}
     console.log("Ensured indexes on docchunks");
+
+    // Ensure indexes for SharedChat, including TTL cleanup on expiresAt
+    try { await SharedChat.collection.createIndex({ shareId: 1 }, { unique: true }); } catch(_){}
+    try { await SharedChat.collection.createIndex({ createdAt: -1 }); } catch(_){ }
+    try { await SharedChat.collection.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }); } catch(_){ }
+    console.log("Ensured indexes on sharedchats (TTL enabled)");
   } catch (e) {
     console.warn("Index setup warning:", e?.message || e);
   }
+
+  // Fallback cleaner: in case TTL monitor lags, remove expired shares hourly
+  setInterval(async () => {
+    try {
+      const SharedChat = require("./models/SharedChat");
+      const result = await SharedChat.deleteMany({ expiresAt: { $lte: new Date() } });
+      if (result.deletedCount) {
+        console.log(`[cleanup] Removed ${result.deletedCount} expired shared chats`);
+      }
+    } catch (err) {
+      console.warn("[cleanup] SharedChat cleanup error:", err?.message || err);
+    }
+  }, 60 * 60 * 1000); // every hour
 });
 
 const PORT = process.env.PORT || 5000;

@@ -49,14 +49,9 @@ const ShareChat = () => {
   };
 
   return (
-    <div className="chat-section">
+    <div className="chat-section share-view">
       <div className="chat-header">
         <h2>{title}</h2>
-        <div className="chat-actions">
-          <button className="quiz-open-btn" onClick={() => window.location.assign('/login')}>
-            Continue this chat
-          </button>
-        </div>
       </div>
       <div className="chat-list-wrapper">
         {loading ? (

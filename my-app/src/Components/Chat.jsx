@@ -427,6 +427,7 @@ const ShareControl = ({ documentId, chat }) => {
           <button className="share-item copy" onClick={createShareAndCopy} disabled={creating}>
             {creating ? 'Generating…' : 'Copy link'}
           </button>
+          <div className="share-note">This link will expire in 24 hours.</div>
         </div>
       )}
     </div>

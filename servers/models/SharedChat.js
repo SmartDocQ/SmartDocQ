@@ -18,11 +18,15 @@ const sharedChatSchema = new mongoose.Schema(
     title: { type: String },
     visibility: { type: String, enum: ["unlisted"], default: "unlisted" },
     messages: { type: [sharedMessageSchema], default: [] },
+    // Expiration: default 24 hours from creation
+    expiresAt: { type: Date, default: () => new Date(Date.now() + 24 * 60 * 60 * 1000) },
   },
   { timestamps: true }
 );
 
 sharedChatSchema.index({ shareId: 1 }, { unique: true });
 sharedChatSchema.index({ createdAt: -1 });
+// TTL index: when expiresAt passes, MongoDB will delete the doc (background process)
+sharedChatSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 module.exports = mongoose.model("SharedChat", sharedChatSchema);
