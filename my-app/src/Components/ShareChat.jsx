@@ -94,6 +94,14 @@ const ShareChat = () => {
     <div className="chat-section share-view">
       <div className="chat-header share-header">
         <div className="share-left">
+          <h2 className="share-title">{title}</h2>
+        </div>
+        <div className="share-center">
+          {expiresAt && !error && (
+            <div className="share-countdown">Expires in {countdown}</div>
+          )}
+        </div>
+        <div className="share-right">
           <button
             className="export-chat-button"
             onClick={exportShared}
@@ -106,14 +114,6 @@ const ShareChat = () => {
               <line x1="12" y1="15" x2="12" y2="3"></line>
             </svg>
           </button>
-        </div>
-        <div className="share-center">
-          {expiresAt && !error && (
-            <div className="share-countdown">Expires in {countdown}</div>
-          )}
-        </div>
-        <div className="share-right">
-          <h2>{title}</h2>
         </div>
       </div>
       <div className="chat-list-wrapper">

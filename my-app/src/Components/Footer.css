@@ -166,6 +166,8 @@
     text-align: center;
     margin-bottom: 0.5rem;
   }
+  /* Center the SmartDocQ logo row on mobile */
+  .footer-logo { justify-content: center; }
   .social-links { justify-content: center; }
   .footer-bottom-content { flex-direction: column; gap: 0.75rem; text-align: center; }
   /* Center Support heading underline and links */

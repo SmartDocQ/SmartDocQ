@@ -6,7 +6,6 @@ import { useToast } from "./ToastContext";
 import Quiz from "./Quiz";
 import Flashcard from "./Flashcard";
 import { apiUrl } from "../config";
-// Share icons
 import whatsappIcon from "../Animations/whatsapp-svgrepo-com.svg";
 import twitterIcon from "../Animations/twitter-color-svgrepo-com.svg";
 import gmailIcon from "../Animations/gmail-old-svgrepo-com.svg";
