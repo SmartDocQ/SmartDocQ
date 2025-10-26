@@ -310,7 +310,9 @@ const UploadPage = () => {
             if (downloadRes.ok) {
               const blob = await downloadRes.blob();
               const url = URL.createObjectURL(blob);
-              setFile({ name: currentDocData.name, type: "application/pdf" });
+              // Keep URL for fallback open-in-new-tab, but pass File to preview so react-pdf can read locally
+              const fileObj = new File([blob], currentDocData.name, { type: "application/pdf" });
+              setFile(fileObj);
               setFileUrl(url);
               setIsPreviewOpen(true);
               showToast && showToast(`Displaying converted PDF: ${currentDocData.name}`, { type: "info" });
@@ -415,7 +417,8 @@ const UploadPage = () => {
         if (downloadRes.ok) {
           const blob = await downloadRes.blob();
           const url = URL.createObjectURL(blob);
-          setFile({ name: item.name, type: "application/pdf" });
+          const fileObj = new File([blob], item.name, { type: "application/pdf" });
+          setFile(fileObj);
           setFileUrl(url);
           if (isConvertedToPdf) {
             showToast && showToast(`Showing converted PDF: ${item.name}`, { type: "info" });

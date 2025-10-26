@@ -304,7 +304,7 @@ function PreviewRenderer({ file, fileUrl, documentId, filename, onTextSaved }) {
 
   // PDF preview (react-pdf with selectable text layer)
   if (type === "application/pdf" || extension === "pdf") {
-    return <PdfPreview fileUrl={fileUrl} />;
+    return <PdfPreview fileUrl={fileUrl} fileBlob={file && file.type === 'application/pdf' ? file : undefined} />;
   }
 
   // Text preview
@@ -341,7 +341,7 @@ function PreviewRenderer({ file, fileUrl, documentId, filename, onTextSaved }) {
   );
 }
 
-function PdfPreview({ fileUrl }) {
+function PdfPreview({ fileUrl, fileBlob }) {
   const [numPages, setNumPages] = useState(null);
   const [pageWidth, setPageWidth] = useState(null);
   const scrollRef = useRef(null);
@@ -372,7 +372,7 @@ function PdfPreview({ fileUrl }) {
       <div className="pdf-frame-wrapper">
         <div ref={scrollRef} style={{ width: '100%', height: '100%', overflow: 'auto' }}>
           <Document
-            file={fileUrl}
+            file={fileBlob || fileUrl}
             onLoadSuccess={onLoadSuccess}
             loading={<div className="preview-loading"><div className="loading-spinner"></div><p>Loading PDF…</p></div>}
             error={<div className="preview-fallback"><p>PDF failed to load.</p><a href={fileUrl} target="_blank" rel="noreferrer" className="fallback-link">Open in new tab</a></div>}
