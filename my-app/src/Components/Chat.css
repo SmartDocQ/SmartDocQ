@@ -424,6 +424,22 @@
   padding: 6px 12px 4px;
 }
 
+/* ShareChat header layout: left export, center countdown, right title */
+.share-header {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+}
+
+.share-header .share-left { justify-self: start; }
+.share-header .share-center { justify-self: center; }
+.share-header .share-right { justify-self: end; }
+
+.share-countdown {
+  color: #c8c8c8;
+  font-size: 0.9rem;
+}
+
 /* Share view layout fixes: let it expand naturally so footer hugs content */
 .chat-section.share-view {
   /* Constrain the shared view so the footer sits right below, and add internal scroll */

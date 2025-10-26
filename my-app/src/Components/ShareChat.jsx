@@ -9,6 +9,8 @@ const ShareChat = () => {
   const [error, setError] = useState('');
   const [title, setTitle] = useState('Shared Chat');
   const [messages, setMessages] = useState([]);
+  const [expiresAt, setExpiresAt] = useState(null);
+  const [countdown, setCountdown] = useState('');
   const chatEndRef = useRef(null);
 
   useEffect(() => {
@@ -20,6 +22,7 @@ const ShareChat = () => {
         if (!res.ok) throw new Error(json.message || 'Failed to load shared chat');
         setTitle(json.title || 'Shared Chat');
         setMessages(Array.isArray(json.messages) ? json.messages : []);
+        setExpiresAt(json.expiresAt || null);
       } catch (e) {
         setError(e.message || 'Unable to load share');
       } finally {
@@ -28,6 +31,45 @@ const ShareChat = () => {
     };
     run();
   }, [shareId]);
+
+  // countdown timer
+  useEffect(() => {
+    if (!expiresAt) return;
+    const end = new Date(expiresAt).getTime();
+    const tick = () => {
+      const now = Date.now();
+      const diff = Math.max(0, end - now);
+      const s = Math.floor(diff / 1000);
+      const hh = String(Math.floor(s / 3600)).padStart(2, '0');
+      const mm = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+      const ss = String(s % 60).padStart(2, '0');
+      setCountdown(`${hh}h ${mm}m ${ss}s`);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [expiresAt]);
+
+  const exportShared = async () => {
+    try {
+      const res = await fetch(apiUrl(`/api/share/${shareId}/export.pdf`));
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({ message: 'Failed to export shared chat' }));
+        throw new Error(j.message || 'Failed to export shared chat');
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'SharedChat.pdf';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(e.message || 'Export failed');
+    }
+  };
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -50,8 +92,29 @@ const ShareChat = () => {
 
   return (
     <div className="chat-section share-view">
-      <div className="chat-header">
-        <h2>{title}</h2>
+      <div className="chat-header share-header">
+        <div className="share-left">
+          <button
+            className="export-chat-button"
+            onClick={exportShared}
+            title="Export shared chat"
+            disabled={loading || !!error || messages.length === 0}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+          </button>
+        </div>
+        <div className="share-center">
+          {expiresAt && !error && (
+            <div className="share-countdown">Expires in {countdown}</div>
+          )}
+        </div>
+        <div className="share-right">
+          <h2>{title}</h2>
+        </div>
       </div>
       <div className="chat-list-wrapper">
         {loading ? (
