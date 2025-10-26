@@ -406,7 +406,7 @@
   margin: 6px 4px;
 }
 
-.share-emoji {
+.share-icon {
   width: 18px;
   display: inline-flex;
   justify-content: center;
@@ -420,13 +420,14 @@
 
 /* Share view layout fixes: let it expand naturally so footer hugs content */
 .chat-section.share-view {
-  max-height: none;
-  height: auto;
+  /* Constrain the shared view so the footer sits right below, and add internal scroll */
+  height: min(90vh, calc(100vh - 140px));
+  max-height: min(90vh, calc(100vh - 140px));
   padding-bottom: 0; /* avoid extra gap above footer */
 }
 
 .chat-section.share-view .chat-list-wrapper {
-  overflow-y: visible; /* no internal scroll; let page handle it */
+  overflow-y: auto; /* scroll inside chat section */
 }
 
 /* Responsive adjustments */
