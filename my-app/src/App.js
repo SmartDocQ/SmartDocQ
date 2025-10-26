@@ -13,6 +13,7 @@ import "./App.css";
 import HelpCenter from './Components/HelpCenter';
 import PrivacyPolicy from './Components/PrivacyPolicy';
 import TermsOfService from './Components/TermsOfService';
+import ShareChat from './Components/ShareChat';
 
 function App() {
   return (                                      
@@ -98,6 +99,17 @@ function Main() {
       <Route 
         path="/admin" 
         element={<AdminRoute />} 
+      />
+
+      <Route
+        path="/share/:shareId"
+        element={
+          <>
+            <Navbar />
+            <ShareChat />
+            <Footer />
+          </>
+        }
       />
     </Routes>
   );

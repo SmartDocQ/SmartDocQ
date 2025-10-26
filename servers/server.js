@@ -12,6 +12,7 @@ const chatRoutes = require("./routes/chat");
 const adminRoutes = require("./routes/admin");
 const contactRoutes = require("./routes/contact");
 const searchRoutes = require("./routes/search");
+const shareRoutes = require("./routes/share");
 
 const app = express();
 // Cloudinary config (reads from environment)
@@ -71,6 +72,7 @@ app.use("/api/chat", chatRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/contact", contactRoutes);
 app.use("/api/search", searchRoutes);
+app.use("/api/share", shareRoutes);
 
 // Health check
 app.get("/healthz", (req, res) => res.json({ status: "ok" }));

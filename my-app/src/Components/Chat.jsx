@@ -220,6 +220,8 @@ const Chat = ({ chat, setChat, chatInput, setChatInput, sendMessage, clearChat, 
               <line x1="12" y1="15" x2="12" y2="3"></line>
             </svg>
           </button>
+          {/* Share Button with menu */}
+          <ShareControl documentId={documentId} chat={chat} />
           <button 
             className="clear-chat-button" 
             onClick={handleClearChat}
@@ -334,3 +336,99 @@ const Chat = ({ chat, setChat, chatInput, setChatInput, sendMessage, clearChat, 
 };
 
 export default Chat;
+
+// Inline Share control component (kept here to avoid extra file wiring)
+const ShareControl = ({ documentId, chat }) => {
+  const { showToast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const menuRef = useRef(null);
+
+  // Close on outside click
+  useEffect(() => {
+    const onDocClick = (e) => {
+      if (!menuRef.current) return;
+      if (!menuRef.current.contains(e.target)) setOpen(false);
+    };
+    if (open) document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [open]);
+
+  const createShareAndCopy = async () => {
+    if (!documentId) return;
+    if (!chat || chat.length === 0) {
+      showToast('Nothing to share yet', { type: 'warning' });
+      return;
+    }
+    try {
+      setCreating(true);
+      const token = localStorage.getItem('token');
+      const res = await fetch(apiUrl(`/api/share/chat/${documentId}`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: token ? `Bearer ${token}` : ''
+        }
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.message || 'Failed to create share link');
+      const link = `${window.location.origin}/share/${json.shareId}`;
+      await navigator.clipboard.writeText(link);
+      showToast('Share link copied', { type: 'success' });
+      setOpen(false);
+    } catch (err) {
+      showToast(err.message || 'Could not copy share link', { type: 'error' });
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const disabled = !documentId || !chat || chat.length === 0;
+
+  const pendingLink = null; // we create when user clicks copy link
+
+  const disabledShare = (platform) => {
+    showToast(`${platform} integration coming soon`, { type: 'info' });
+  };
+
+  return (
+    <div className="share-control" ref={menuRef}>
+      <button
+        className="export-chat-button share-button"
+        title={disabled ? 'Start a chat to share' : 'Share chat'}
+        onClick={() => !disabled && setOpen((v) => !v)}
+        disabled={disabled}
+        aria-haspopup="true"
+        aria-expanded={open}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="18" cy="5" r="3"></circle>
+          <circle cx="6" cy="12" r="3"></circle>
+          <circle cx="18" cy="19" r="3"></circle>
+          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+          <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+        </svg>
+      </button>
+      {open && (
+        <div className="share-menu" role="menu">
+          <button className="share-item" onClick={() => disabledShare('WhatsApp')}>
+            <span className="share-emoji">🟢</span>
+            WhatsApp
+          </button>
+          <button className="share-item" onClick={() => disabledShare('X')}>
+            <span className="share-emoji">❌</span>
+            X (Twitter)
+          </button>
+          <button className="share-item" onClick={() => disabledShare('Email')}>
+            <span className="share-emoji">✉️</span>
+            Email
+          </button>
+          <div className="share-sep" />
+          <button className="share-item copy" onClick={createShareAndCopy} disabled={creating}>
+            {creating ? 'Generating…' : 'Copy link'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
