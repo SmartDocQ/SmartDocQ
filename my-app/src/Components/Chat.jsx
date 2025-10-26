@@ -357,30 +357,161 @@ const ShareControl = ({ documentId, chat }) => {
     return () => document.removeEventListener('mousedown', onDocClick);
   }, [open]);
 
+  // Create a share snapshot and return the public link
+  const createShareLink = async () => {
+    if (!documentId) throw new Error('Missing document');
+    if (!chat || chat.length === 0) throw new Error('Nothing to share yet');
+    const token = localStorage.getItem('token');
+    const res = await fetch(apiUrl(`/api/share/chat/${documentId}`), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: token ? `Bearer ${token}` : ''
+      }
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.message || 'Failed to create share link');
+    return `${window.location.origin}/share/${json.shareId}`;
+  };
+
+  // Copy link flow (uses createShareLink)
   const createShareAndCopy = async () => {
-    if (!documentId) return;
-    if (!chat || chat.length === 0) {
-      showToast('Nothing to share yet', { type: 'warning' });
-      return;
-    }
     try {
       setCreating(true);
-      const token = localStorage.getItem('token');
-      const res = await fetch(apiUrl(`/api/share/chat/${documentId}`), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: token ? `Bearer ${token}` : ''
-        }
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json.message || 'Failed to create share link');
-      const link = `${window.location.origin}/share/${json.shareId}`;
+      const link = await createShareLink();
       await navigator.clipboard.writeText(link);
       showToast('Share link copied', { type: 'success' });
       setOpen(false);
     } catch (err) {
-      showToast(err.message || 'Could not copy share link', { type: 'error' });
+      const msg = err?.message || 'Could not copy share link';
+      if (msg === 'Nothing to share yet') {
+        showToast(msg, { type: 'warning' });
+      } else {
+        showToast(msg, { type: 'error' });
+      }
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  // WhatsApp share: prefer app if installed, fallback to web
+  const shareToWhatsApp = async () => {
+    try {
+      setCreating(true);
+      const link = await createShareLink();
+      const text = `Shared chat from SmartDocQ (expires in 24h) ${link}`;
+      const encoded = encodeURIComponent(text);
+      const appUrl = `whatsapp://send?text=${encoded}`;
+      const webUrl = `https://wa.me/?text=${encoded}`;
+
+      // Heuristic: on mobile, try app first with a timed fallback; on desktop, open web
+      const ua = navigator.userAgent || '';
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+
+      if (isMobile) {
+        // Try to open the app
+        const timeout = setTimeout(() => {
+          try { window.open(webUrl, '_blank', 'noopener,noreferrer'); } catch (_) {}
+        }, 800);
+        try {
+          window.location.href = appUrl;
+        } catch (_) {
+          clearTimeout(timeout);
+          window.open(webUrl, '_blank', 'noopener,noreferrer');
+        }
+      } else {
+        // Desktop: open web WhatsApp (will hand off to app if possible)
+        window.open(webUrl, '_blank', 'noopener,noreferrer');
+      }
+      setOpen(false);
+    } catch (err) {
+      const msg = err?.message || 'WhatsApp share failed';
+      if (msg === 'Nothing to share yet') {
+        showToast(msg, { type: 'warning' });
+      } else {
+        showToast(msg, { type: 'error' });
+      }
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  // X (Twitter) share: try app deep link, fallback to web intent
+  const shareToX = async () => {
+    try {
+      setCreating(true);
+      const link = await createShareLink();
+      const text = `Shared chat from SmartDocQ (expires in 24h) ${link}`;
+      const encoded = encodeURIComponent(text);
+      const webUrl = `https://twitter.com/intent/tweet?text=${encoded}`;
+      const ua = navigator.userAgent || '';
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+
+      if (isMobile) {
+        // Try known app schemes; many clients still support twitter://
+        const appSchemes = [
+          `twitter://post?message=${encoded}`,
+          `twitter://post?text=${encoded}`,
+          `x://post?message=${encoded}`,
+        ];
+        let opened = false;
+        const fallbackTimer = setTimeout(() => {
+          if (!opened) {
+            try { window.open(webUrl, '_blank', 'noopener,noreferrer'); } catch (_) {}
+          }
+        }, 800);
+        try {
+          // Attempt first scheme; if blocked, fallback timer will trigger
+          window.location.href = appSchemes[0];
+          opened = true;
+        } catch (_) {
+          // If navigation throws synchronously, fallback immediately
+          clearTimeout(fallbackTimer);
+          window.open(webUrl, '_blank', 'noopener,noreferrer');
+        }
+      } else {
+        window.open(webUrl, '_blank', 'noopener,noreferrer');
+      }
+      setOpen(false);
+    } catch (err) {
+      const msg = err?.message || 'Share to X failed';
+      if (msg === 'Nothing to share yet') {
+        showToast(msg, { type: 'warning' });
+      } else {
+        showToast(msg, { type: 'error' });
+      }
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  // Email share: open mail client via mailto, fallback to Gmail web compose
+  const shareToEmail = async () => {
+    try {
+      setCreating(true);
+      const link = await createShareLink();
+      const subject = 'Shared chat from SmartDocQ (expires in 24h)';
+      const body = `Shared chat from SmartDocQ (expires in 24h)\n\n${link}`;
+      const mailto = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      const gmailWeb = `https://mail.google.com/mail/?view=cm&fs=1&tf=1&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+      let fallback = setTimeout(() => {
+        try { window.open(gmailWeb, '_blank', 'noopener,noreferrer'); } catch (_) {}
+      }, 800);
+      try {
+        window.location.href = mailto;
+      } catch (_) {
+        clearTimeout(fallback);
+        window.open(gmailWeb, '_blank', 'noopener,noreferrer');
+      }
+      setOpen(false);
+    } catch (err) {
+      const msg = err?.message || 'Email share failed';
+      if (msg === 'Nothing to share yet') {
+        showToast(msg, { type: 'warning' });
+      } else {
+        showToast(msg, { type: 'error' });
+      }
     } finally {
       setCreating(false);
     }
@@ -414,19 +545,19 @@ const ShareControl = ({ documentId, chat }) => {
       </button>
       {open && (
         <div className="share-menu" role="menu">
-          <button className="share-item" onClick={() => disabledShare('WhatsApp')}>
+          <button className="share-item" onClick={shareToWhatsApp} disabled={creating}>
             <span className="share-icon" aria-hidden="true">
               <img src={whatsappIcon} alt="WhatsApp" width={18} height={18} />
             </span>
             WhatsApp
           </button>
-          <button className="share-item" onClick={() => disabledShare('X')}>
+          <button className="share-item" onClick={shareToX} disabled={creating}>
             <span className="share-icon" aria-hidden="true">
               <img src={twitterIcon} alt="X (Twitter)" width={18} height={18} />
             </span>
             X (Twitter)
           </button>
-          <button className="share-item" onClick={() => disabledShare('Email')}>
+          <button className="share-item" onClick={shareToEmail} disabled={creating}>
             <span className="share-icon" aria-hidden="true">
               <img src={gmailIcon} alt="Email" width={18} height={18} />
             </span>
