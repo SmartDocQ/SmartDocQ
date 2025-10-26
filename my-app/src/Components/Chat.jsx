@@ -6,6 +6,10 @@ import { useToast } from "./ToastContext";
 import Quiz from "./Quiz";
 import Flashcard from "./Flashcard";
 import { apiUrl } from "../config";
+// Share icons
+import whatsappIcon from "../Animations/whatsapp-svgrepo-com.svg";
+import twitterIcon from "../Animations/twitter-color-svgrepo-com.svg";
+import gmailIcon from "../Animations/gmail-old-svgrepo-com.svg";
 
 const TypingIndicator = () => (
   <div className="typing-indicator">
@@ -413,32 +417,19 @@ const ShareControl = ({ documentId, chat }) => {
         <div className="share-menu" role="menu">
           <button className="share-item" onClick={() => disabledShare('WhatsApp')}>
             <span className="share-icon" aria-hidden="true">
-              {/* WhatsApp-like: chat bubble with phone handset */}
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 11.5a8.5 8.5 0 0 1-11.92 7.76L4 20l.74-4.95A8.5 8.5 0 1 1 21 11.5z"/>
-                <path d="M16.5 14.5c-1 .6-2.2.9-3.5.9-2.7 0-5.5-2.2-5.5-5 0-1.1.4-2.1 1-3" opacity="0"/>
-                <path d="M15.2 13.1c-.3.2-.7.3-1 .2-.9-.3-2.1-1.1-2.9-2-.8-.8-1.5-2-1.8-2.9-.1-.4 0-.7.2-1l.6-.7c.2-.2.5-.2.7 0l1.2 1.2c.2.2.2.5 0 .8l-.4.6c-.1.2-.1.5 0 .7.3.6.9 1.3 1.4 1.8.6.6 1.2 1.1 1.8 1.4.2.1.5.1.7 0l.6-.4c.2-.2.6-.2.8 0l1.2 1.2c.2.2.2.5 0 .7l-.7.6z"/>
-              </svg>
+              <img src={whatsappIcon} alt="WhatsApp" width={18} height={18} />
             </span>
             WhatsApp
           </button>
           <button className="share-item" onClick={() => disabledShare('X')}>
             <span className="share-icon" aria-hidden="true">
-              {/* X (Twitter) */}
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 4l16 16"/>
-                <path d="M20 4L4 20"/>
-              </svg>
+              <img src={twitterIcon} alt="X (Twitter)" width={18} height={18} />
             </span>
             X (Twitter)
           </button>
           <button className="share-item" onClick={() => disabledShare('Email')}>
             <span className="share-icon" aria-hidden="true">
-              {/* Mail */}
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="5" width="18" height="14" rx="2" ry="2"/>
-                <path d="M3 7l9 6 9-6"/>
-              </svg>
+              <img src={gmailIcon} alt="Email" width={18} height={18} />
             </span>
             Email
           </button>

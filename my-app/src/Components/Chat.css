@@ -412,6 +412,12 @@
   justify-content: center;
 }
 
+.share-icon img {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
 .share-note {
   color: #9aa0a6; /* subtle gray */
   font-size: 0.78rem;
@@ -424,10 +430,18 @@
   height: min(90vh, calc(100vh - 140px));
   max-height: min(90vh, calc(100vh - 140px));
   padding-bottom: 0; /* avoid extra gap above footer */
+  margin-bottom: 0;
 }
 
 .chat-section.share-view .chat-list-wrapper {
   overflow-y: auto; /* scroll inside chat section */
+  padding-bottom: 0; /* remove inner bottom padding to hug footer */
+  margin-bottom: 0;
+}
+
+.chat-section.share-view .chat-list {
+  margin-bottom: 0;
+  padding-bottom: 0;
 }
 
 /* Responsive adjustments */
