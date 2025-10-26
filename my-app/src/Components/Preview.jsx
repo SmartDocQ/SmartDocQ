@@ -1,13 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Document, Page, pdfjs } from 'react-pdf';
+import { Document, Page, pdfjs } from "react-pdf";
 import { useToast } from "./ToastContext";
 import { apiUrl } from "../config";
 import "./Preview.css";
-
-// Configure pdf.js worker via CDN (keeps build simple and avoids local worker resolution issues)
-try {
-  pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
-} catch (_) { /* ignore */ }
 
 const Preview = ({
   file,
@@ -232,6 +227,7 @@ const Preview = ({
               documentId={documentId}
               filename={filename || file?.name}
               onTextSaved={onTextSaved}
+              onSummarizeSelection={onSummarizeSelection}
             />
           ) : (
             <EmptyPreview />
@@ -285,7 +281,7 @@ const Preview = ({
 };
 
 // --- Inner Components ---
-function PreviewRenderer({ file, fileUrl, documentId, filename, onTextSaved }) {
+function PreviewRenderer({ file, fileUrl, documentId, filename, onTextSaved, onSummarizeSelection }) {
   if (!file) return null;
 
   const type = file.type;
@@ -302,9 +298,9 @@ function PreviewRenderer({ file, fileUrl, documentId, filename, onTextSaved }) {
     );
   }
 
-  // PDF preview (react-pdf with selectable text layer)
+  // PDF preview with react-pdf (DOM text layer enables selection like text files)
   if (type === "application/pdf" || extension === "pdf") {
-    return <PdfPreview fileUrl={fileUrl} fileBlob={file && file.type === 'application/pdf' ? file : undefined} />;
+    return <PdfPreviewReact file={file} fileUrl={fileUrl} />;
   }
 
   // Text preview
@@ -337,59 +333,6 @@ function PreviewRenderer({ file, fileUrl, documentId, filename, onTextSaved }) {
       <div className="fallback-icon">📄</div>
       <p>Preview not available</p>
       <p className="fallback-subtitle">For this file type</p>
-    </div>
-  );
-}
-
-function PdfPreview({ fileUrl, fileBlob }) {
-  const [numPages, setNumPages] = useState(null);
-  const [pageWidth, setPageWidth] = useState(null);
-  const scrollRef = useRef(null);
-
-  const onLoadSuccess = ({ numPages }) => setNumPages(numPages || 1);
-
-  // Auto-fit to container width
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const measure = () => {
-      const w = Math.max(0, el.clientWidth - 16); // allow for padding/scrollbar
-      setPageWidth(w || null);
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    window.addEventListener('orientationchange', measure);
-    return () => {
-      try { ro.disconnect(); } catch (_) {}
-      window.removeEventListener('orientationchange', measure);
-    };
-  }, []);
-
-  const pages = Array.from({ length: Math.min(numPages || 1, 50) }, (_, i) => i + 1);
-  return (
-    <div className="pdf-preview">
-      <div className="pdf-frame-wrapper">
-        <div ref={scrollRef} style={{ width: '100%', height: '100%', overflow: 'auto' }}>
-          <Document
-            file={fileBlob || fileUrl}
-            onLoadSuccess={onLoadSuccess}
-            loading={<div className="preview-loading"><div className="loading-spinner"></div><p>Loading PDF…</p></div>}
-            error={<div className="preview-fallback"><p>PDF failed to load.</p><a href={fileUrl} target="_blank" rel="noreferrer" className="fallback-link">Open in new tab</a></div>}
-          >
-            {pages.map((p) => (
-              <Page
-                key={p}
-                pageNumber={p}
-                width={pageWidth || undefined}
-                renderTextLayer
-                renderAnnotationLayer={false}
-                className="pdf-page"
-              />
-            ))}
-          </Document>
-        </div>
-      </div>
     </div>
   );
 }
@@ -567,3 +510,113 @@ function EmptyPreview() {
 }
 
 export default Preview;
+
+// --- React-PDF Viewer (with selectable text layer) ---
+// Configure pdf.js worker from CDN to avoid bundling issues
+try {
+  if (pdfjs && pdfjs.GlobalWorkerOptions) {
+    // Use matching version worker from unpkg
+    pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
+  }
+} catch (_) { /* ignore */ }
+
+function PdfPreviewReact({ file, fileUrl }) {
+  const containerRef = useRef(null);
+  const [numPages, setNumPages] = useState(null);
+  const [pageWidth, setPageWidth] = useState(0);
+  const [scale, setScale] = useState(1.0);
+  const [loadError, setLoadError] = useState(null);
+
+  // Measure container and fit pages to width
+  useEffect(() => {
+    const measure = () => {
+      if (!containerRef.current) return;
+      const w = containerRef.current.clientWidth || 0;
+      setPageWidth(Math.max(200, w - 24)); // small padding
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (containerRef.current) ro.observe(containerRef.current);
+    window.addEventListener('resize', measure);
+    return () => {
+      try { ro.disconnect(); } catch (_) {}
+      window.removeEventListener('resize', measure);
+    };
+  }, []);
+
+  const onDocLoad = ({ numPages }) => setNumPages(numPages || 1);
+
+  const source = fileUrl
+    ? { url: fileUrl }
+    : file && file.type === 'application/pdf'
+      ? file
+      : null;
+
+  return (
+    <div className="pdf-preview" ref={containerRef}>
+      <div className="pdf-frame-wrapper" style={{ position: 'relative' }}>
+        <div style={{ position: 'absolute', right: 12, top: 12, zIndex: 3, display: 'flex', gap: 8 }}>
+          <button
+            title="Zoom out"
+            onClick={() => setScale(s => Math.max(0.5, Math.round((s - 0.1) * 10) / 10))}
+            className="text-control-btn"
+          >−</button>
+          <button
+            title="Zoom in"
+            onClick={() => setScale(s => Math.min(3.0, Math.round((s + 0.1) * 10) / 10))}
+            className="text-control-btn"
+          >+</button>
+          <button
+            title="Fit to width"
+            onClick={() => setScale(1.0)}
+            className="text-control-btn"
+          >Fit</button>
+        </div>
+
+        <div style={{ width: '100%', height: '100%', overflow: 'auto', padding: 12 }}>
+          {!source ? (
+            <div className="preview-fallback">
+              <p>PDF source unavailable.</p>
+            </div>
+          ) : (
+            <Document
+              file={source}
+              onLoadSuccess={onDocLoad}
+              onLoadError={(e) => setLoadError(e?.message || 'Failed to load PDF')}
+              loading={
+                <div className="preview-loading">
+                  <div className="loading-spinner"></div>
+                  <p>Loading PDF…</p>
+                </div>
+              }
+              error={
+                <div className="preview-fallback">
+                  <p>Failed to load PDF.</p>
+                </div>
+              }
+            >
+              {Array.from(new Array(numPages || 1), (_el, idx) => (
+                <div key={`p_${idx+1}`} style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+                  <Page
+                    pageNumber={idx + 1}
+                    width={pageWidth ? Math.round(pageWidth * scale) : undefined}
+                    renderTextLayer
+                    renderAnnotationLayer={false}
+                  />
+                </div>
+              ))}
+            </Document>
+          )}
+        </div>
+
+        {loadError && (
+          <div style={{ position: 'absolute', left: 12, bottom: 12, zIndex: 2 }}>
+            <div className="preview-fallback">
+              <p>{loadError}</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
