@@ -18,6 +18,10 @@ const sharedChatSchema = new mongoose.Schema(
     title: { type: String },
     visibility: { type: String, enum: ["unlisted"], default: "unlisted" },
     messages: { type: [sharedMessageSchema], default: [] },
+    // Lightweight fingerprint of the snapshot to detect content changes
+    snapshotHash: { type: String },
+    // Convenience: number of messages included in the snapshot
+    messageCount: { type: Number, default: 0 },
     // Expiration: default 24 hours from creation
     expiresAt: { type: Date, default: () => new Date(Date.now() + 24 * 60 * 60 * 1000) },
   },
@@ -26,6 +30,7 @@ const sharedChatSchema = new mongoose.Schema(
 
 sharedChatSchema.index({ shareId: 1 }, { unique: true });
 sharedChatSchema.index({ createdAt: -1 });
+sharedChatSchema.index({ createdBy: 1, document: 1, createdAt: -1 });
 // TTL index: when expiresAt passes, MongoDB will delete the doc (background process)
 sharedChatSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 

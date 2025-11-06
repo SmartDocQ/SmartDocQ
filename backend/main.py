@@ -17,31 +17,30 @@ import threading
 profanity.load_censor_words()
 import re
 
-# Cache for converted PDFs (in production, use Redis or file-based cache)
+
 pdf_cache = {}
 
 # ====== CONFIG ======
 app = Flask(__name__)
-# CORS: allowlist via FRONTEND_ORIGINS env (comma-separated), default to localhost:3000 in dev
+
 _origins = os.environ.get("FRONTEND_ORIGINS", "http://localhost:3000")
 try:
     _raw_allow = [o.strip() for o in _origins.split(",") if o.strip()]
 except Exception:
     _raw_allow = ["http://localhost:3000"]
 
-# Convert wildcard entries like "*.vercel.app" to a regex Flask-CORS understands
 _allow_processed = []
 for entry in _raw_allow:
     if entry.startswith("*."):
-        # Escape the domain part and allow http/https
+
         import re as _re
-        domain = _re.escape(entry[2:])  # drop *.
+        domain = _re.escape(entry[2:]) 
         _allow_processed.append(fr"https?://.*\.{domain}$")
     elif entry.startswith("http://*.") or entry.startswith("https://*."):
-        # Support scheme-qualified wildcard like "https://*.vercel.app"
+
         import re as _re
         scheme, rest = entry.split("://", 1)
-        domain = rest[2:]  # drop *.
+        domain = rest[2:]  
         domain_escaped = _re.escape(domain)
         _allow_processed.append(fr"{scheme}://.*\.{domain_escaped}$")
     else:
@@ -49,12 +48,10 @@ for entry in _raw_allow:
 
 CORS(app, resources={r"/*": {"origins": _allow_processed}})
 
-# Limit upload size to avoid overwhelming the server (25 MB)
 app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024
 
 URL_REGEX = re.compile(r"(https?://[^\s]+|www\.[^\s]+|ftp://[^\s]+|mailto:[^\s]+|t\.me/[^\s]+|discord\.gg/[^\s]+)", re.IGNORECASE)
 
-# Configuration via environment variables for production readiness
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 NODE_BASE_URL = os.environ.get("NODE_BASE_URL", "http://localhost:5000")
 SERVICE_TOKEN = os.environ.get("SERVICE_TOKEN", "smartdoc-service-token")
@@ -63,11 +60,9 @@ CHUNK_UPSERT_URL = os.environ.get("CHUNK_UPSERT_URL", f"{NODE_BASE_URL}/api/sear
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
 
-TEXT_MODEL = os.environ.get("TEXT_MODEL", "models/gemini-2.5-flash")  # stable free model
+TEXT_MODEL = os.environ.get("TEXT_MODEL", "models/gemini-2.5-flash")  
 EMBED_MODEL = os.environ.get("EMBED_MODEL", "models/text-embedding-004")
 
-# Persistent Chroma DB (configurable path)
-# Use CHROMA_DB_PATH to place the vector store on a persistent disk in production (e.g., /var/data/chroma_db on Render)
 CHROMA_DB_PATH = os.environ.get("CHROMA_DB_PATH", os.path.join(os.getcwd(), "chroma_db"))
 
 def _ensure_dir(p: str) -> str:
@@ -79,8 +74,6 @@ def _ensure_dir(p: str) -> str:
         return ""
 
 def _init_chroma_client():
-    # Try env path (absolute normalized), then fallback to ./chroma_db,
-    # finally fallback to ephemeral client so the app stays up.
     env_path = os.path.abspath(CHROMA_DB_PATH)
     if _ensure_dir(env_path):
         try:
@@ -102,7 +95,6 @@ def _init_chroma_client():
         print("[Chroma] Using EphemeralClient (no persistence)")
         return cli
     except Exception as e:
-        # As the last resort, rethrow to fail fast
         raise e
 
 chroma_client = _init_chroma_client()
@@ -111,7 +103,7 @@ collection = chroma_client.get_or_create_collection("documents")
 def contains_link(text):
     return bool(URL_REGEX.search(text))
 
-# Treat high-distance (low similarity) results as not relevant
+
 NOISE_DISTANCE_THRESHOLD = 0.6
 
 # ====== GREETING/SMALL-TALK DETECTION & TOPIC SUGGESTIONS ======
@@ -136,12 +128,10 @@ def is_greeting_or_smalltalk(text: str) -> bool:
     s = _norm(text)
     if not s:
         return False
-    # very short, no question mark
     if len(s) <= 40 and "?" not in s:
         for kw in list(GREET_WORDS) + list(SMALL_TALK) + list(WISHES):
             if s == kw or re.search(rf"(^|\b){re.escape(kw)}(\b|$)", s):
                 return True
-    # explicit greetings even if longer
     for kw in GREET_WORDS:
         if re.search(rf"(^|\b){re.escape(kw)}(\b|$)", s):
             return True
@@ -169,7 +159,6 @@ def extract_headings_from_text(text: str, limit: int = 6) -> list:
             key = low.strip(":")
             if key not in seen:
                 seen.add(key)
-                # Clean trailing colon and excessive dots
                 clean = ln.strip().rstrip(": .")
                 candidates.append(clean)
                 if len(candidates) >= limit:
@@ -177,11 +166,9 @@ def extract_headings_from_text(text: str, limit: int = 6) -> list:
     return candidates
 
 def suggest_topics_for_doc(doc_id: str) -> list:
-    # If consent indicates sensitive and not confirmed, don't parse the doc; return generic topics
     st = consent_state.get(doc_id) or {}
     if st.get("sensitive") and not st.get("confirmed"):
         return GENERIC_TOPICS[:6]
-    # Try to fetch and parse
     try:
         ok, filename, mimetype, data_bytes = fetch_doc_from_node(doc_id)
         if not ok:
@@ -221,7 +208,6 @@ def detect_sensitive(text: str) -> dict:
         except Exception:
             continue
     summary["found"] = any_found
-    # Log only counts/types, not values
     print("[Sensitive Check] Summary:", {"found": summary["found"], "matches": summary["matches"]})
     return summary
 
@@ -282,13 +268,12 @@ def chunk_text(text, size=1000, overlap=200):
     buf = []
     cur_len = 0
     for p in paras:
-        p_len = len(p) + 2  # account for a newline joiner
+        p_len = len(p) + 2  
         if cur_len + p_len <= size or not buf:
             buf.append(p)
             cur_len += p_len
         else:
             windows.append("\n\n".join(buf))
-            # start next window with overlap from the tail of previous buffer
             join = "\n\n".join(buf)
             if overlap > 0 and len(join) > overlap:
                 tail = join[-overlap:]
@@ -369,7 +354,7 @@ def index_from_atlas():
         ok, filename, mimetype, data = fetch_doc_from_node(doc_id)
         if not ok:
             return jsonify({"error": filename}), 404
-        # Scan first and defer indexing if sensitive and not confirmed
+
         text = extract_text_for_mimetype(filename, mimetype, data)
         if not text:
             return jsonify({"error": "Unsupported or empty document"}), 400
@@ -390,7 +375,6 @@ def index_from_atlas():
                 "doc_id": doc_id,
             }), 200
 
-        # No sensitive data or already confirmed: proceed to index
         indexed, added = index_bytes(doc_id, filename, mimetype, data)
         if not indexed:
             return jsonify({"error": "Unsupported or empty document"}), 400
@@ -409,44 +393,41 @@ def convert_word_to_pdf():
         if not file or file.filename == '':
             return jsonify({"error": "No file selected"}), 400
         
-        # Read file data
         data = file.read()
         filename = file.filename or "document"
         
-        # Check if it's a Word document
         ext = (filename.rsplit('.',1)[-1].lower() if '.' in filename else '')
         content_type = file.content_type or ''
         
         if content_type not in ("application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document") and ext not in ("doc", "docx"):
             return jsonify({"error": "Not a Word document"}), 415
         
-        # Lazy import docx2pdf
+
         try:
             docx2pdf = importlib.import_module("docx2pdf")
         except Exception:
             return jsonify({"error": "docx2pdf not installed on server"}), 501
         
-        # Convert to PDF
+
         with tempfile.TemporaryDirectory() as td:
             in_path = os.path.join(td, filename)
-            # Ensure extension
+
             if not in_path.lower().endswith((".docx", ".doc")):
                 in_path += ".docx"
             
-            # Write input file
+
             with open(in_path, 'wb') as f:
                 f.write(data)
             
             temp_pdf = os.path.join(td, "converted.pdf")
             
-            # Convert using docx2pdf
+
             docx2pdf.convert(in_path, temp_pdf)
-            
-            # Read converted PDF
+          
             with open(temp_pdf, 'rb') as f:
                 pdf_data = f.read()
             
-            # Return PDF as response
+  
             response = app.response_class(
                 pdf_data,
                 mimetype='application/pdf',
@@ -461,56 +442,53 @@ def convert_word_to_pdf():
 @app.route("/api/document/preview/<doc_id>.pdf", methods=["GET"])
 def preview_word_as_pdf(doc_id):
     try:
-        # Check cache first
+      
         cache_key = f"pdf_preview_{doc_id}"
         if cache_key in pdf_cache:
             cached_path = pdf_cache[cache_key]
             if os.path.exists(cached_path):
                 return send_file(cached_path, mimetype="application/pdf", as_attachment=False, download_name="preview.pdf")
             else:
-                # Remove stale cache entry
+            
                 del pdf_cache[cache_key]
         
         ok, filename, mimetype, data = fetch_doc_from_node(doc_id)
         if not ok:
             return jsonify({"error": filename}), 404
-        # Only support Word types here
+  
         ext = (filename.rsplit('.',1)[-1].lower() if '.' in filename else '')
         if mimetype not in ("application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document") and ext not in ("doc", "docx"):
             return jsonify({"error": "Not a Word document"}), 415
         
-        # Lazy import docx2pdf
+   
         try:
             docx2pdf = importlib.import_module("docx2pdf")
         except Exception:
             return jsonify({"error": "docx2pdf not installed on server"}), 501
         
-        # Create persistent cache directory
+     
         cache_dir = os.path.join(os.getcwd(), "pdf_cache")
         os.makedirs(cache_dir, exist_ok=True)
         
-        # Generate cache file path based on doc_id and content hash
+       
         content_hash = hashlib.md5(data).hexdigest()[:8]
         cached_pdf = os.path.join(cache_dir, f"{doc_id}_{content_hash}.pdf")
-        
-        # If cached version exists, serve it
+      
         if os.path.exists(cached_pdf):
             pdf_cache[cache_key] = cached_pdf
             return send_file(cached_pdf, mimetype="application/pdf", as_attachment=False, download_name="preview.pdf")
         
-        # Convert and cache
         with tempfile.TemporaryDirectory() as td:
             in_path = os.path.join(td, filename)
-            # Ensure extension
+
             if not in_path.lower().endswith((".docx", ".doc")):
                 in_path += ".docx"
             with open(in_path, 'wb') as f:
                 f.write(data)
             temp_pdf = os.path.join(td, "preview.pdf")
-            # Convert using Word (Windows) or LibreOffice if configured by docx2pdf
+
             docx2pdf.convert(in_path, temp_pdf)
             
-            # Copy to persistent cache
             import shutil
             shutil.copy2(temp_pdf, cached_pdf)
             pdf_cache[cache_key] = cached_pdf
@@ -522,7 +500,6 @@ def preview_word_as_pdf(doc_id):
 # ---- MY DOCS ----
 @app.route("/api/document/my", methods=["GET"])
 def list_docs():
-    # This endpoint is optional if frontend uses Node for listing
     result = collection.get()
     metas = result.get("metadatas", []) or []
     docs = {}
@@ -561,12 +538,11 @@ def delete_doc(doc_id):
     return jsonify({"message": "Deleted successfully"})
 
 # ---- ASK ----
-# Specific HTTP 404 as JSON (avoid 500s on unknown paths)
 @app.errorhandler(404)
 def handle_404(e):
     return jsonify({"error": "Not found"}), 404
 
-# Global error handler to ensure JSON always (non-HTTP exceptions)
+
 @app.errorhandler(Exception)
 def handle_exception(e):
     if isinstance(e, HTTPException):
@@ -574,7 +550,7 @@ def handle_exception(e):
     print("Unhandled Exception:", e)
     return jsonify({"error": str(e)}), 500
 
-# Return JSON when file is too large
+
 @app.errorhandler(413)
 def handle_request_entity_too_large(e):
     return jsonify({"error": "File too large. Max 25 MB."}), 413
@@ -588,10 +564,10 @@ def ask_doc():
 
     if not question:
         return jsonify({"error": "Missing question"}), 400
-    # Intercept greetings/small talk and guide the user with topic suggestions
+
     if is_greeting_or_smalltalk(question):
         topics = suggest_topics_for_doc(doc_id) if doc_id else GENERIC_TOPICS[:6]
-        # Build a concise, friendly guidance message
+
         bullet = "\n".join(f"- {t}" for t in topics)
         msg = (
             "Hello! 👋 I’m here to help you with your document. You can ask questions about the following sections/topics in your document:\n"
@@ -609,7 +585,7 @@ def ask_doc():
         return jsonify({"error": "Missing doc_id"}), 400
 
     try:
-        # Consent gate: if sensitive and not confirmed, interpret y/n, otherwise warn
+
         state = consent_state.get(doc_id) or {"sensitive": False, "confirmed": False, "awaiting": False}
         if state.get("sensitive") and not state.get("confirmed"):
             q_lower = question.lower().strip()
@@ -628,7 +604,7 @@ def ask_doc():
                     "answer": "Chat cancelled. Please re-upload a cleaned version of the document without sensitive data.",
                     "requireConfirmation": False
                 })
-            # Prompt for confirmation
+
             state["awaiting"] = True
             consent_state[doc_id] = state
             return jsonify({
@@ -637,21 +613,21 @@ def ask_doc():
                 "sensitiveSummary": state.get("summary", {})
             })
 
-        # General knowledge fallback consent: if awaiting, interpret current input as y/n
+
         gf = general_fallback.get(doc_id) or {"awaiting": False}
         if gf.get("awaiting"):
             q_lower = question.lower().strip()
             if q_lower in ("y", "yes"):
-                # Generate a general (non-document) answer for the original pending question
+         
                 orig_q = gf.get("pending_question") or ""
-                # Clear state
+              
                 general_fallback[doc_id] = {"awaiting": False}
 
                 if not orig_q:
                     return jsonify({
                         "answer": "Okay, please ask your question again.",
                     })
-                # Use the LLM without document context
+       
                 prompt = f"""
 You are a helpful assistant. Provide a clear, accurate answer to the user's question below.
 
@@ -669,32 +645,32 @@ Question: {orig_q}
                     return jsonify({"answer": "⚠️ Error generating a general answer. Please try again."})
 
             if q_lower in ("n", "no"):
-                # Clear state and decline
+      
                 general_fallback[doc_id] = {"awaiting": False}
                 return jsonify({
                     "answer": "Okay, I won't answer that. Please ask a question based on the uploaded document.",
                 })
 
-            # Still awaiting an explicit y/n
+      
             return jsonify({
                 "answer": "⚠️ I couldn't find relevant information about your question in the uploaded document.\nDo you want me to answer using general knowledge instead? Reply \"y\" for yes or \"n\" for no.",
             })
 
-        # Ensure the document is indexed in Chroma for this doc_id. If not, start background indexing and return fast.
+
         if not has_index(doc_id):
-            # Kick off background indexing once per doc_id to avoid blocking
+
             _start_background_indexing(doc_id)
             return jsonify({
                 "answer": "Indexing this document in the background. Please try your question again in ~30–60 seconds.",
                 "requireConfirmation": False
             })
 
-        # Generate embedding for the question
+
         q_emb = generate_embeddings(question)
         if not q_emb:
             return jsonify({"error": "Failed to generate embedding"}), 500
 
-        # Query Chroma for top-N relevant chunks (wider net)
+
         results = collection.query(
             query_embeddings=[q_emb],
             n_results=12,
@@ -704,7 +680,7 @@ Question: {orig_q}
 
         docs = results.get("documents", [[]])[0] or []
         dists = results.get("distances", [[]])[0] or []
-        # Lexical re-ranking to boost true positives inside the document
+
         def _keywords(s: str):
             stop = {"the","a","an","and","or","of","in","on","to","for","is","are","was","were","be","with","by","at","from","as","that","this","it","its","if","then","than","into","about","over","under","within","between"}
             toks = re.split(r"[^A-Za-z0-9]+", (s or "").lower())
@@ -719,17 +695,17 @@ Question: {orig_q}
             overlap = len(q_terms & terms)
             if dist is None:
                 dist = 0.5
-            # Combine distance (lower is better) and lexical overlap (higher is better)
+
             sim = 1.0 - max(0.0, min(1.0, dist))
             score = 0.7 * sim + 0.3 * (overlap / (len(q_terms) or 1))
             candidates.append((score, dist, overlap, doc_txt))
 
-        # Keep top k by score; also respect a noise ceiling to cut extreme outliers
+
         candidates.sort(key=lambda x: x[0], reverse=True)
         topk = [c[-1] for c in candidates[:5] if c[1] is None or c[1] < 0.9]
         filtered = [doc for doc, dist in zip(docs, dists) if (dist is None) or (dist < 0.6)]
         if not topk and not filtered:
-            # No relevant chunks found: offer user a choice to use general knowledge (y/n)
+
             general_fallback[doc_id] = {
                 "awaiting": True,
                 "pending_question": question,
@@ -741,10 +717,8 @@ Question: {orig_q}
                 )
             })
 
-        # Combine chunks into context: prefer reranked results, fall back to strict filtered
         context = "\n\n".join(topk or filtered)
 
-        # Build prompt for LLM with formatting instructions
         prompt = f"""
 You are a document assistant. Use ONLY the context below to answer the question.
 Do NOT include anything that is not in the context.
@@ -763,13 +737,11 @@ Question: {question}
 Answer strictly from the context with proper formatting:
 """
         model = genai.GenerativeModel(TEXT_MODEL)
-        # Avoid hanging: cap model call to ~30s
         response = model.generate_content(prompt, request_options={"timeout": 30})
 
-        # Return AI answer with improved formatting
         if response and response.text:
             raw_text = (response.text or "").strip()
-            # If the model indicates the answer isn't in context, offer general knowledge y/n choice
+
             if is_out_of_doc_answer(raw_text):
                 general_fallback[doc_id] = {
                     "awaiting": True,
@@ -781,7 +753,6 @@ Answer strictly from the context with proper formatting:
                 )
                 return jsonify({"answer": format_response(appended), "requireConfirmation": False})
 
-            # Otherwise, format and return normally
             answer_text = format_response(raw_text)
             return jsonify({"answer": answer_text, "requireConfirmation": False})
         else:
@@ -797,27 +768,26 @@ def format_response(text):
     """
     import re
     
-    # Remove extra whitespace while preserving intentional line breaks
-    text = re.sub(r'\n\s*\n\s*\n+', '\n\n', text)  # Remove excessive line breaks
-    text = re.sub(r'[ \t]+', ' ', text)  # Normalize spaces
+    text = re.sub(r'\n\s*\n\s*\n+', '\n\n', text)  
+    text = re.sub(r'[ \t]+', ' ', text)  
     
-    # Add line breaks after periods that end sentences (not abbreviations)
+
     text = re.sub(r'(\w)\. ([A-Z])', r'\1.\n\n\2', text)
     
-    # Add proper spacing around bullet points and numbers
+
     text = re.sub(r'^\s*[-•*]\s*', '• ', text, flags=re.MULTILINE)
     text = re.sub(r'^\s*(\d+)\.\s*', r'\1. ', text, flags=re.MULTILINE)
     
-    # Add line breaks before bullet points and numbered lists
+
     text = re.sub(r'([.!?])\s*(•|\d+\.)', r'\1\n\n\2', text)
     
-    # Ensure there's spacing after colons when introducing lists
+
     text = re.sub(r':(\s*)(•|\d+\.)', r':\n\n\1\2', text)
     
-    # Add spacing around section headers (text that ends with colon)
+
     text = re.sub(r'([^:\n]):\s*\n', r'\1:\n\n', text)
     
-    # Clean up and return
+
     text = text.strip()
     return text
 
@@ -854,12 +824,12 @@ def fetch_doc_from_node(doc_id: str):
     """
     try:
         url = f"{NODE_BASE_URL}/api/document/{doc_id}/download"
-        # Use service token for server-to-server auth
+
         headers = {"x-service-token": SERVICE_TOKEN}
         r = requests.get(url, headers=headers, timeout=NODE_FETCH_TIMEOUT)
         if r.status_code != 200:
             return False, f"Node returned {r.status_code}", None, None
-        # Try to parse filename from headers; fallback
+   
         disp = r.headers.get("Content-Disposition", "")
         filename = "document"
         if "filename=" in disp:
@@ -878,7 +848,7 @@ def _background_index(doc_id: str):
         ok, filename, mimetype, data_bytes = fetch_doc_from_node(doc_id)
         if not ok:
             return
-        # Scan and respect consent before indexing
+
         text_for_scan = extract_text_for_mimetype(filename, mimetype, data_bytes)
         if not text_for_scan:
             return
@@ -892,7 +862,6 @@ def _background_index(doc_id: str):
             "summary": scan,
         }
         if scan.get("found") and not prev.get("confirmed", False):
-            # Do not index until consent
             return
         index_bytes(doc_id, filename, mimetype, data_bytes)
     finally:
@@ -928,7 +897,6 @@ def index_bytes(doc_id: str, filename: str, mimetype: str, data: bytes):
     if not text:
         return False, 0
 
-    # Safer re-indexing: remove any existing chunks for this document to avoid duplicate IDs
     try:
         existing = collection.get(where={"doc_id": doc_id}) or {}
         existing_ids = existing.get("ids", []) or []
@@ -941,7 +909,6 @@ def index_bytes(doc_id: str, filename: str, mimetype: str, data: bytes):
     added = 0
     chunk_records = []
 
-    # Batch add to Chroma to reduce DB overhead
     BATCH_SIZE = 64
     batch_embeddings = []
     batch_documents = []
@@ -981,7 +948,7 @@ def index_bytes(doc_id: str, filename: str, mimetype: str, data: bytes):
                 meta["sheet"] = sheet_name
             batch_metadatas.append(meta)
             batch_ids.append(f"{doc_id}_{chunk_index}")
-            # capture for keyword index
+
             try:
                 chunk_records.append({"chunk": chunk_index, "sheet": sheet_name or None, "text": c})
             except Exception:
@@ -991,7 +958,6 @@ def index_bytes(doc_id: str, filename: str, mimetype: str, data: bytes):
             if len(batch_ids) >= BATCH_SIZE:
                 flush_batch()
 
-    # Flush remaining items
     flush_batch()
     _push_chunks_to_node(doc_id, filename, chunk_records)
     return True, added
@@ -1005,7 +971,6 @@ def index_text(doc_id: str, filename: str, text: str):
     if not text:
         return False, 0
 
-    # Remove any existing chunks for this document to avoid duplicate IDs
     try:
         existing = collection.get(where={"doc_id": doc_id}) or {}
         existing_ids = existing.get("ids", []) or []
@@ -1018,7 +983,6 @@ def index_text(doc_id: str, filename: str, text: str):
     added = 0
     chunk_records = []
 
-    # Batch add to Chroma to reduce DB overhead
     BATCH_SIZE = 64
     batch_embeddings = []
     batch_documents = []
@@ -1067,7 +1031,6 @@ def index_text(doc_id: str, filename: str, text: str):
             if len(batch_ids) >= BATCH_SIZE:
                 flush_batch()
 
-    # Flush remaining items
     flush_batch()
     _push_chunks_to_node(doc_id, filename or "document.txt", chunk_records)
     return True, added
@@ -1102,7 +1065,6 @@ def set_consent():
     st["awaiting"] = False
     consent_state[doc_id] = st
 
-    # If user consents and document is not indexed, index now
     if consent and not has_index(doc_id):
         ok, filename, mimetype, data_bytes = fetch_doc_from_node(doc_id)
         if not ok:
@@ -1136,7 +1098,7 @@ def replace_text_index():
         return jsonify({"error": "Missing text"}), 400
 
     try:
-        # Scan and respect consent before indexing
+
         scan = detect_sensitive(text or "")
         prev = consent_state.get(doc_id) or {}
         consent_state[doc_id] = {
@@ -1161,7 +1123,6 @@ def replace_text_index():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-    # Register blueprints and initialize modules
 try:
     init_quiz(
         collection,
@@ -1173,7 +1134,6 @@ try:
     )
     app.register_blueprint(quiz_bp)
 except Exception as _e:
-    # Avoid crashing on import in environments without genai; endpoints remain available if init succeeds later
     pass
 
 try:
@@ -1189,7 +1149,6 @@ try:
 except Exception as _e:
     pass
 
-# Register summarizer
 try:
     app.register_blueprint(init_summarizer(TEXT_MODEL, genai))
 except Exception as _e:

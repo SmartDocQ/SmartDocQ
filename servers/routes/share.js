@@ -13,6 +13,8 @@ function genShareId() {
 }
 
 // Create a share snapshot from current user's chat for a document
+// Change detection: if the latest snapshot for this user+doc has the same content hash,
+// reuse its shareId and extend its expiresAt instead of creating a new one.
 router.post("/chat/:documentId", verifyToken, ensureActive, async (req, res) => {
   try {
     const { documentId } = req.params;
@@ -22,6 +24,32 @@ router.post("/chat/:documentId", verifyToken, ensureActive, async (req, res) => 
     const chat = await Chat.findOne({ user: req.userId, document: documentId });
     if (!chat || chat.messages.length === 0) {
       return res.status(400).json({ message: "No messages to share" });
+    }
+
+    // Compute a stable content hash based on role+text across all messages.
+    // Ratings or timestamps are ignored for change detection to avoid unnecessary new links.
+    const hasher = crypto.createHash("sha256");
+    for (const m of chat.messages) {
+      hasher.update(m.role || "");
+      hasher.update("\n");
+      hasher.update(m.text || "");
+      hasher.update("\n");
+    }
+    const snapshotHash = hasher.digest("hex");
+
+    // See if the latest snapshot for this user+doc matches the same hash and is still around.
+    const latest = await SharedChat.findOne({ createdBy: req.userId, document: doc._id })
+      .sort({ createdAt: -1 })
+      .exec();
+
+    const nextExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    if (latest && latest.snapshotHash === snapshotHash) {
+      // If it was expired by timestamp but not yet removed by TTL, revive by pushing expiresAt forward
+      latest.expiresAt = nextExpiry;
+      latest.messageCount = Array.isArray(chat.messages) ? chat.messages.length : 0;
+      await latest.save();
+      return res.json({ shareId: latest.shareId });
     }
 
     // Create unique id, retry on collision (very unlikely)
@@ -44,6 +72,9 @@ router.post("/chat/:documentId", verifyToken, ensureActive, async (req, res) => 
         at: m.at,
         rating: m.rating || "none",
       })),
+      snapshotHash,
+      messageCount: Array.isArray(chat.messages) ? chat.messages.length : 0,
+      expiresAt: nextExpiry,
     });
 
     res.json({ shareId: snapshot.shareId });
