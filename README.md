@@ -2,11 +2,11 @@
 
 In today's information-driven world, efficiently extracting insights from documents is crucial for academic success and professional productivity. The growing volume of digital documents presents challenges in comprehension, knowledge retention, and information retrieval. SmartDocQ is an intelligent document processing platform that leverages advanced AI technology to transform how users interact with their documents.
 
-### Overview
+## Overview
 
 SmartDocQ is a comprehensive full-stack web application that enables users to upload documents, engage with content through natural language queries, and generate educational resources automatically. By combining Retrieval-Augmented Generation (RAG) with Google's Gemini AI, the platform delivers accurate, context-aware responses while maintaining document privacy and security.
 
-### Features
+## Features
 
 ### Core Functionality
 - **Document Upload & Processing**: Support for PDF, DOCX, and TXT files with intelligent text extraction and preprocessing
@@ -27,9 +27,9 @@ SmartDocQ is a comprehensive full-stack web application that enables users to up
 - **Report Management**: Handle user feedback and support inquiries efficiently
 - **System Monitoring**: Real-time logs and performance metrics
 
-### Technology Stack
+## Technology Stack
 
-**Frontend**
+### Frontend
 - **React.js 18.x**: Modern component-based UI framework
 - **React Router DOM**: Client-side routing and navigation
 - **i18next**: Internationalization support
@@ -258,10 +258,6 @@ Refer to `DEPLOYMENT_CHECKLIST.md` for detailed deployment instructions.
 - **Voice Interaction**: Voice-based queries and responses
 - **Offline Mode**: Local document processing without internet
 
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
 ## Acknowledgments
 
 Special thanks to:
@@ -273,8 +269,7 @@ Special thanks to:
 
 For questions, issues, or feature requests:
 - **Issues**: [GitHub Issues](https://github.com/SmartDocQ/SmartDocQ/issues)
-- **Email**: support@smartdocq.com
-- **Documentation**: [Wiki](https://github.com/SmartDocQ/SmartDocQ/wiki)
+- **Email**: smartdocq@gmail.com
 
 ## Contributors
 
