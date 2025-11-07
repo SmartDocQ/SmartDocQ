@@ -1,4 +1,6 @@
-# SmartDocQ - AI-Powered Document Intelligence Platform
+# SmartDocQ — AI Document Assistant | Document Intelligence & Summarization Platform
+
+**Live Demo:** [https://smartdocq.vercel.app](https://smartdocq.vercel.app)
 
 In today's information-driven world, efficiently extracting insights from documents is crucial for academic success and professional productivity. The growing volume of digital documents presents challenges in comprehension, knowledge retention, and information retrieval. SmartDocQ is an intelligent document processing platform that leverages advanced AI technology to transform how users interact with their documents.
 
@@ -280,4 +282,3 @@ Thanks to all the contributors who have helped build SmartDocQ:
 <!-- ALL-CONTRIBUTORS-LIST:END -->
 
 ---
-
