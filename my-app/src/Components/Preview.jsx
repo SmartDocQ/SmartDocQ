@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useToast } from "./ToastContext";
 import { apiUrl } from "../config";
 import "./Preview.css";
@@ -371,7 +371,7 @@ function PlainTextPreview({ file, documentId, filename, onTextSaved }) {
     reader.readAsText(file);
   }, [file]);
 
-  // Auto-resize textarea
+  // Auto-resize textarea while editing
   useEffect(() => {
     if (textareaRef.current && isEditing) {
       textareaRef.current.style.height = 'auto';
@@ -379,47 +379,31 @@ function PlainTextPreview({ file, documentId, filename, onTextSaved }) {
     }
   }, [editedText, isEditing]);
 
-  // Handle Ctrl+S shortcut for saving text
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (isEditing && (e.ctrlKey || e.metaKey) && e.key === 's') {
-        e.preventDefault();
-        doSave();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isEditing, doSave]);
-
   const handleEdit = () => {
     setIsEditing(true);
     setStatus("unsaved");
-    // Focus the textarea after enabling edit mode
     setTimeout(() => {
       textareaRef.current?.focus();
       textareaRef.current?.setSelectionRange(
         textareaRef.current.value.length,
         textareaRef.current.value.length
       );
-      // Trigger auto-resize after focusing
-      if (textareaRef.current) {
-        textareaRef.current.style.height = 'auto';
-        textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
-      }
     }, 10);
+  };
+
+  const handleTextChange = (e) => {
+    setEditedText(e.target.value);
+    if (status !== "unsaved") setStatus("unsaved");
   };
 
   const doSave = async () => {
     if (!documentId) {
-      // Local-only fallback
       setText(editedText);
       setIsEditing(false);
       setStatus("saved");
       showToast && showToast("Saved locally (no documentId)", { type: "info" });
       return;
     }
-
     try {
       setIsSaving(true);
       const token = localStorage.getItem("token");
@@ -436,7 +420,6 @@ function PlainTextPreview({ file, documentId, filename, onTextSaved }) {
         const msg = data?.message || data?.error || "Save failed";
         throw new Error(msg);
       }
-
       if (data?.requireConfirmation) {
         showToast && showToast("Sensitive content detected; indexing paused until you consent.", { type: "info" });
       } else {
@@ -453,45 +436,35 @@ function PlainTextPreview({ file, documentId, filename, onTextSaved }) {
     }
   };
 
-  const handleSave = () => {
-    doSave();
-  };
-
-  const handleCancel = () => {
-    setEditedText(text);
-    setIsEditing(false);
-    setStatus("saved");
-  };
-
-  const handleTextChange = (e) => {
-    setEditedText(e.target.value);
-    if (status === "saved") {
-      setStatus("unsaved");
-    }
-  };
+  // Ctrl+S to save (do not include doSave in deps to keep stable; allowed via lint directive)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (isEditing && (e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        doSave();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditing]);
 
   return (
-    <div className="text-preview">
-      <div className="text-preview-controls">
-        {isEditing ? (
-          <>
-            <button className="text-control-btn save-btn" onClick={handleSave} disabled={isSaving}>
-              {isSaving ? "Saving..." : "Save"}
-            </button>
-            <button className="text-control-btn cancel-btn" onClick={handleCancel}>
-              Cancel
-            </button>
-          </>
-        ) : (
-          <button className="text-control-btn edit-btn" onClick={handleEdit}>
-            Edit
-          </button>
-        )}
+    <div className="text-preview-wrapper">
+      <div className="text-actions" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+        <button
+          className="btn-edit-save"
+          onClick={isEditing ? doSave : handleEdit}
+          disabled={isSaving}
+          title={isEditing ? 'Save (Ctrl+S)' : 'Edit'}
+        >
+          {isEditing ? (isSaving ? 'Saving…' : 'Save') : 'Edit'}
+        </button>
         <div className={`text-status ${status}`}>
-          {status === "saved" ? "✓ Saved" : "• Unsaved changes"}
+          {status === 'saved' ? '✓ Saved' : '• Unsaved changes'}
         </div>
       </div>
-      
+
       {isEditing ? (
         <textarea
           ref={textareaRef}

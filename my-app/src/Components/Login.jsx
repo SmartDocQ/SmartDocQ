@@ -33,8 +33,8 @@ function Login({ onAuthSuccess = () => {} }) {
       length: password.length >= 8,
       uppercase: /[A-Z]/.test(password),
       number: /[0-9]/.test(password),
-    // Simplified escapes inside character class to satisfy lint (no-useless-escape)
-    special: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>/?]/.test(password),
+      // Treat any non-alphanumeric character as special; simpler and lint-friendly
+      special: /[^A-Za-z0-9]/.test(password),
     };
 
     // Scoring system
