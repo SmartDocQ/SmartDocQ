@@ -519,11 +519,7 @@ const ShareControl = ({ documentId, chat }) => {
 
   const disabled = !documentId || !chat || chat.length === 0;
 
-  const pendingLink = null; // we create when user clicks copy link
-
-  const disabledShare = (platform) => {
-    showToast(`${platform} integration coming soon`, { type: 'info' });
-  };
+  // Removed unused variables to satisfy CI lint rules
 
   return (
     <div className="share-control" ref={menuRef}>

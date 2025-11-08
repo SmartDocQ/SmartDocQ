@@ -23,7 +23,6 @@ const Preview = ({
   const [toolbarPos, setToolbarPos] = useState({ left: 12, top: 12 });
   const [fadingOut, setFadingOut] = useState(false);
   const [justShown, setJustShown] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
   const [lastEditEnd, setLastEditEnd] = useState(0);
   const dragStartedInPreview = useRef(false);
 
@@ -151,7 +150,7 @@ const Preview = ({
       try {
         const t = e.target;
         if (t && t.classList && t.classList.contains('txt-editor')) {
-          setIsEditing(true);
+          // entering edit mode; track via timestamp on blur
         }
       } catch (_) {}
     };
@@ -159,7 +158,6 @@ const Preview = ({
       try {
         const t = e.target;
         if (t && t.classList && t.classList.contains('txt-editor')) {
-          setIsEditing(false);
           setLastEditEnd(Date.now());
         }
       } catch (_) {}
@@ -392,7 +390,7 @@ function PlainTextPreview({ file, documentId, filename, onTextSaved }) {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isEditing, editedText]);
+  }, [isEditing, doSave]);
 
   const handleEdit = () => {
     setIsEditing(true);
