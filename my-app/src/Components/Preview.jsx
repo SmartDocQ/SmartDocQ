@@ -453,10 +453,11 @@ function PlainTextPreview({ file, documentId, filename, onTextSaved }) {
     <div className="text-preview-wrapper">
       <div className="text-actions" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
         <button
-          className="btn-edit-save"
+          className={`btn-edit-save ${isEditing ? 'save-mode' : ''}`}
           onClick={isEditing ? doSave : handleEdit}
           disabled={isSaving}
-          title={isEditing ? 'Save (Ctrl+S)' : 'Edit'}
+          title={isEditing ? 'Save (Ctrl+S)' : 'Edit document text'}
+          aria-label={isEditing ? 'Save document text' : 'Edit document text'}
         >
           {isEditing ? (isSaving ? 'Saving…' : 'Save') : 'Edit'}
         </button>
