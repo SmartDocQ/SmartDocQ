@@ -396,12 +396,20 @@ function PlainTextPreview({ file, documentId, filename, onTextSaved }) {
     if (status !== "unsaved") setStatus("unsaved");
   };
 
+  const handleCancel = () => {
+    // Revert edits and exit edit mode
+    setEditedText(text);
+    setIsEditing(false);
+    setStatus("saved");
+    showToast && showToast("Edit cancelled", { type: "info" });
+  };
+
   const doSave = async () => {
     if (!documentId) {
       setText(editedText);
       setIsEditing(false);
       setStatus("saved");
-      showToast && showToast("Saved locally (no documentId)", { type: "info" });
+      showToast && showToast("Successfully edited (saved locally)", { type: "success" });
       return;
     }
     try {
@@ -420,15 +428,15 @@ function PlainTextPreview({ file, documentId, filename, onTextSaved }) {
         const msg = data?.message || data?.error || "Save failed";
         throw new Error(msg);
       }
+      // Preserve sensitive content message, but still show success edit toast
       if (data?.requireConfirmation) {
         showToast && showToast("Sensitive content detected; indexing paused until you consent.", { type: "info" });
-      } else {
-        showToast && showToast("Saved and reindexed", { type: "success" });
       }
       setText(editedText);
       setIsEditing(false);
       setStatus("saved");
       onTextSaved && onTextSaved(data?.message || "Saved");
+      showToast && showToast("Successfully edited", { type: "success" });
     } catch (e) {
       showToast && showToast(e.message || "Save failed", { type: "error" });
     } finally {
@@ -450,8 +458,8 @@ function PlainTextPreview({ file, documentId, filename, onTextSaved }) {
   }, [isEditing]);
 
   return (
-    <div className="text-preview-wrapper">
-      <div className="text-actions" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+    <div className="text-preview text-preview-wrapper">
+      <div className="text-actions">
         <button
           className={`btn-edit-save ${isEditing ? 'save-mode' : ''}`}
           onClick={isEditing ? doSave : handleEdit}
@@ -461,6 +469,17 @@ function PlainTextPreview({ file, documentId, filename, onTextSaved }) {
         >
           {isEditing ? (isSaving ? 'Saving…' : 'Save') : 'Edit'}
         </button>
+        {isEditing && (
+          <button
+            className="btn-cancel-edit"
+            onClick={handleCancel}
+            disabled={isSaving}
+            title="Cancel editing"
+            aria-label="Cancel editing"
+          >
+            Cancel
+          </button>
+        )}
         <div className={`text-status ${status}`}>
           {status === 'saved' ? '✓ Saved' : '• Unsaved changes'}
         </div>

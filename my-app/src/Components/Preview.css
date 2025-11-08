@@ -106,6 +106,17 @@
   flex-direction: column;
   min-height: 0;
 }
+.text-preview-wrapper {
+  background: linear-gradient(135deg,#0d0d0d 0%, #070707 100%);
+  border:1px solid rgba(255,255,255,0.08);
+  border-radius:12px;
+  box-shadow: inset 0 0 12px rgba(0,0,0,0.6);
+  overflow:hidden;
+  flex: 1;          /* allow to fill available space */
+  min-height: 0;    /* enable child scrollbars instead of shrinking */
+  display: flex;
+  flex-direction: column;
+}
 
 .txt-preview {
   flex: 1;
@@ -401,6 +412,30 @@
   border-color: rgba(16,185,129,0.55);
 }
 
+/* Cancel button styling */
+.btn-cancel-edit {
+  background: linear-gradient(135deg, #3b0d0d 0%, #2a0909 100%);
+  color: #fca5a5;
+  border: 1px solid rgba(239,68,68,0.35);
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: .3px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  transition: background .18s ease, border-color .18s ease;
+}
+.btn-cancel-edit:hover:not(:disabled) {
+  background: linear-gradient(135deg, #991b1b 0%, #7f1d1d 100%);
+  border-color: rgba(239,68,68,0.55);
+}
+.btn-cancel-edit:active:not(:disabled) {
+  background: linear-gradient(135deg, #7f1d1d 0%, #661313 100%);
+}
+.btn-cancel-edit:disabled { opacity:.5; cursor:not-allowed; }
+
 .text-preview-wrapper {
   background: linear-gradient(135deg,#0d0d0d 0%, #070707 100%);
   border:1px solid rgba(255,255,255,0.08);
@@ -410,9 +445,17 @@
 }
 
 .text-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   padding:10px 14px;
   border-bottom:1px solid rgba(255,255,255,0.07);
   background:rgba(0,0,0,0.35);
+}
+
+/* Push the saved/unsaved badge to the right side */
+.text-actions .text-status {
+  margin-left: auto;
 }
 
 /* Text Editor */
