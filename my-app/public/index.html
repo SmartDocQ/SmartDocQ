@@ -24,13 +24,42 @@
     <meta name="twitter:image" content="web-logo.png" />
 
     <!-- Google tag (gtag.js) -->
-     <script async src="https://www.googletagmanager.com/gtag/js?id=G-VVQFTRDG2Y"></script>
-     <script>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-VVQFTRDG2Y"></script>
+    <script>
       window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
+      function gtag() { dataLayer.push(arguments); }
       gtag('js', new Date());
       gtag('config', 'G-VVQFTRDG2Y');
     </script>
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "SmartDocQ",
+        "url": "https://smartdocq.vercel.app/",
+        "logo": "https://smartdocq.vercel.app/web-logo.png",
+        "sameAs": [
+          "https://www.linkedin.com/in/smartdocq",
+          "https://x.com/SmartDocQ"
+        ]
+      }
+    </script>
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "SmartDocQ",
+        "url": "https://smartdocq.vercel.app/",
+        "potentialAction": {
+          "@type": "SearchAction",
+          "target": "https://smartdocq.vercel.app/?q={search_term_string}",
+          "query-input": "required name=search_term_string"
+        }
+      }
+    </script>
+
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
