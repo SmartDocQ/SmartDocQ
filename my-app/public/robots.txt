@@ -1,3 +1,7 @@
-# https://www.robotstxt.org/robotstxt.html
+# robots.txt for SmartDocQ
+# Allow all search engines to crawl the website
 User-agent: *
-Disallow:
+Allow: /
+
+# Provide sitemap location for better crawling
+Sitemap: https://smartdocq.vercel.app/sitemap.xml
