@@ -49,7 +49,7 @@ SmartDocQ is a comprehensive full-stack web application that enables users to up
 - **Flask 3.x**: Python web framework for AI processing
 - **Google Gemini 2.5 Flash**: Advanced text generation and comprehension
 - **Text-Embedding-004**: High-quality vector embeddings
-- **Qdrant Cloud**: Managed vector database for semantic search
+- **ChromaDB 0.5+**: Vector database for semantic search
 
 ### Document Processing
 - **PyPDF2**: PDF text extraction
@@ -58,7 +58,7 @@ SmartDocQ is a comprehensive full-stack web application that enables users to up
 
 ### Database
 - **MongoDB Atlas**: Primary NoSQL database for user data, documents, and chat history
-- **Qdrant Cloud**: Vector store for document embeddings and semantic retrieval
+- **ChromaDB**: Vector store for document embeddings and semantic retrieval
 
 ## Architecture
 
@@ -124,17 +124,10 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 # Install dependencies
 pip install -r requirements.txt
 
-# Create .env file with (example):
+# Create .env file with:
 # GEMINI_API_KEY=your_google_ai_api_key
 # SERVICE_TOKEN=your_service_token
-# NODE_BASE_URL=http://localhost:4000
-# FRONTEND_ORIGINS=http://localhost:3000
-# TEXT_MODEL=models/gemini-2.5-flash
-# EMBED_MODEL=models/text-embedding-004
-# QDRANT_URL=https://<your-cluster-id>-<region>.qdrant.tech
-# QDRANT_API_KEY=<your-qdrant-api-key>
-# QDRANT_COLLECTION=documents
-# QDRANT_TIMEOUT_SEC=30
+# MONGODB_URI=your_mongodb_connection_string
 
 # Start Flask service
 python main.py
@@ -156,24 +149,7 @@ npm install
 npm start
 ```
 
-### 5. Health Check
-
-The Flask service health endpoint includes vector store status:
-
-```
-GET http://localhost:5001/healthz
-
-{
-	"status": "ok",
-	"vectorStore": {
-		"ok": true,
-		"collection": "documents",
-		"vector_size": 1536
-	}
-}
-```
-
-### 6. Access the Application
+### 5. Access the Application
 
 Open your browser and navigate to:
 ```

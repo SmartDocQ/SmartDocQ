@@ -9,10 +9,6 @@ Copy `.env.example` to `.env` and fill in:
 - SERVICE_TOKEN: must match Node's SERVICE_TOKEN to authorize server-to-server downloads
 - GEMINI_API_KEY: Google Generative AI API key
 - TEXT_MODEL, EMBED_MODEL: optional overrides
-- QDRANT_URL: Qdrant Cloud endpoint (e.g., https://<cluster-id>-<region>.qdrant.tech)
-- QDRANT_API_KEY: API key for Qdrant Cloud
-- QDRANT_COLLECTION: collection name (default: documents)
-- QDRANT_TIMEOUT_SEC: client timeout in seconds (default: 30)
 
 ## Install & run
 - Create a virtualenv
@@ -20,15 +16,4 @@ Copy `.env.example` to `.env` and fill in:
 - python main.py (defaults to port 5001)
 
 ## Health
-- GET /healthz returns service status and vector store metadata. Example:
-
-```
-{
-	"status": "ok",
-	"vectorStore": {
-		"ok": true,
-		"collection": "documents",
-		"vector_size": 1536
-	}
-}
-```
+- GET /healthz returns `{ "status": "ok" }`

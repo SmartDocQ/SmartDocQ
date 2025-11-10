@@ -53,10 +53,7 @@ This checklist lets you deploy without running anything locally.
   - GEMINI_API_KEY = <your-google-generative-ai-key>
   - TEXT_MODEL = models/gemini-2.5-flash (optional)
   - EMBED_MODEL = models/text-embedding-004 (optional)
-  - QDRANT_URL = https://<your-cluster-id>-<region>.qdrant.tech
-  - QDRANT_API_KEY = <your-qdrant-api-key>
-  - QDRANT_COLLECTION = documents (optional)
-  - QDRANT_TIMEOUT_SEC = 30 (optional)
+  - CHROMA_DB_PATH = /var/data/chroma_db (recommended when using a persistent disk)
 - After deploy, check: GET https://<your-flask-domain>/healthz → { "status": "ok" }.
 
 ## 4) Order of operations
@@ -83,8 +80,9 @@ This checklist lets you deploy without running anything locally.
     - Header: `x-ops-key: <OPS_KEY>` (required in production)
   - Alternatively, set `RESEND_API_KEY` (and a valid `RESEND_FROM`) to send mail over HTTPS, which works on hosts that block SMTP.
 
-### Vector store (Qdrant Cloud)
-- No local disk persistence required. Ensure `QDRANT_URL` and `QDRANT_API_KEY` are set.
-- Optionally set a custom `QDRANT_COLLECTION`. The system validates vector size on first upsert.
+### Render-specific (persistent ChromaDB)
+- Add a Persistent Disk to the Flask service (e.g., size 1–5 GB) and mount it at `/var/data`.
+- Set env var `CHROMA_DB_PATH=/var/data/chroma_db`.
+- Redeploy. Your embeddings will persist across restarts.
 
 Keep servers/.env.example and backend/.env.example as references for all variables.

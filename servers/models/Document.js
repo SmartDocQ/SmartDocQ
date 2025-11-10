@@ -6,7 +6,7 @@ const documentSchema = new mongoose.Schema({
   type: { type: String, required: true },
   size: { type: Number, required: true },
   data: { type: Buffer, required: true }, // File as binary data
-  // Ensure a stable per-document id string used by downstream services (Flask/Qdrant vector store)
+  // Ensure a stable per-document id string used by downstream services (Chroma/Flask)
   doc_id: { type: String, default: null },
   processingStatus: { type: String, enum: ["queued", "indexing", "awaiting-consent", "done", "failed"], default: "queued" },
   processedAt: { type: Date },
