@@ -358,16 +358,19 @@ def index_from_atlas():
         text = extract_text_for_mimetype(filename, mimetype, data)
         if not text:
             return jsonify({"error": "Unsupported or empty document"}), 400
+
+        # Pull persisted consent meta from Node
+        meta = fetch_doc_meta_from_node(doc_id) or {}
         scan = detect_sensitive(text)
         prev = consent_state.get(doc_id) or {}
         consent_state[doc_id] = {
             "sensitive": bool(scan.get("found")),
-            "confirmed": bool(prev.get("confirmed", False)),
+            "confirmed": bool(meta.get("consentConfirmed") or prev.get("confirmed", False)),
             "awaiting": False,
             "last_scan": "ok",
             "summary": scan,
         }
-        if scan.get("found") and not prev.get("confirmed", False):
+        if scan.get("found") and not (meta.get("consentConfirmed") or prev.get("confirmed", False)):
             return jsonify({
                 "message": "Sensitive data detected; indexing deferred until consent.",
                 "requireConfirmation": True,
@@ -839,6 +842,18 @@ def fetch_doc_from_node(doc_id: str):
     except Exception as e:
         return False, str(e), None, None
 
+def fetch_doc_meta_from_node(doc_id: str):
+    """Fetch document metadata (sensitiveFound/consentConfirmed) from Node for consent persistence."""
+    try:
+        url = f"{NODE_BASE_URL}/api/document/{doc_id}/_meta"
+        headers = {"x-service-token": SERVICE_TOKEN}
+        r = requests.get(url, headers=headers, timeout=NODE_FETCH_TIMEOUT)
+        if r.status_code != 200:
+            return None
+        return r.json()
+    except Exception:
+        return None
+
 # --- Background indexing support ---
 _indexing_in_progress = set()
 _indexing_lock = threading.Lock()
@@ -1064,6 +1079,14 @@ def set_consent():
     st["confirmed"] = consent
     st["awaiting"] = False
     consent_state[doc_id] = st
+    # Persist consent to Node for durability (best-effort)
+    try:
+        requests.post(f"{NODE_BASE_URL}/api/document/{doc_id}/consent",
+                      json={"consent": consent},
+                      headers={"x-service-token": SERVICE_TOKEN},
+                      timeout=NODE_FETCH_TIMEOUT)
+    except Exception:
+        pass
 
     if consent and not has_index(doc_id):
         ok, filename, mimetype, data_bytes = fetch_doc_from_node(doc_id)

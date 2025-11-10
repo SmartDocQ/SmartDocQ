@@ -105,8 +105,27 @@ router.post("/upload", verifyToken, ensureActive, upload.single("file"), async (
     });
     await doc.save();
 
-    // Trigger background indexing, do not await
-    triggerIndexing(doc._id).catch(() => {});
+    // If file may contain sensitive data, do a quick server-side text scan before indexing
+    // Heuristic: only scan PDFs and text to avoid heavy conversions here
+    try {
+      const type = (finalMimetype || '').toLowerCase();
+      let textSample = '';
+      if (type.includes('pdf') || type === 'text/plain') {
+        // Ask Flask to scan-and-index; it will gate on consent and set statuses accordingly
+        await fetch(FLASK_INDEX_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ documentId: doc.doc_id })
+        });
+        // Flask will set consent_state and skip indexing if sensitive & not confirmed
+      } else {
+        // Non-text binaries: fall back to async indexing trigger
+        triggerIndexing(doc._id).catch(() => {});
+      }
+    } catch (_) {
+      // If pre-scan fails, fall back to background trigger (do not block upload)
+      triggerIndexing(doc._id).catch(() => {});
+    }
 
     res.status(201).json({ 
       message: "File uploaded", 
@@ -177,7 +196,20 @@ router.post("/upload/batch", verifyToken, ensureActive, upload.array("files", 10
         originalType: f.mimetype
       });
       await doc.save();
-      triggerIndexing(doc._id).catch(() => {});
+      try {
+        const type = (finalMimetype || '').toLowerCase();
+        if (type.includes('pdf') || type === 'text/plain') {
+          await fetch(FLASK_INDEX_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ documentId: doc.doc_id })
+          });
+        } else {
+          triggerIndexing(doc._id).catch(() => {});
+        }
+      } catch (_) {
+        triggerIndexing(doc._id).catch(() => {});
+      }
       created.push({ 
         documentId: doc._id, 
         doc_id: doc.doc_id, 
@@ -380,14 +412,26 @@ async function triggerIndexing(documentId) {
     await doc.save();
 
     // Ask Flask to index by Atlas doc_id
-    await fetch(FLASK_INDEX_URL, {
+    const resp = await fetch(FLASK_INDEX_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ documentId: doc.doc_id })
     });
-
-    doc.processingStatus = "done";
-    doc.processedAt = new Date();
+    const payload = await resp.json().catch(()=>({}));
+    if (resp.ok) {
+      if (payload.requireConfirmation) {
+        doc.processingStatus = "awaiting-consent";
+        doc.sensitiveFound = true;
+        doc.sensitiveSummary = payload.sensitiveSummary || {};
+        doc.lastScanAt = new Date();
+      } else {
+        doc.processingStatus = "done";
+        doc.processedAt = new Date();
+      }
+    } else {
+      doc.processingStatus = "failed";
+      doc.processingError = payload.error || `Indexing failed (${resp.status})`;
+    }
     await doc.save();
   } catch (err) {
     try {
@@ -395,6 +439,53 @@ async function triggerIndexing(documentId) {
     } catch (_) {}
   }
 }
+
+// ---- Persist consent (user action) ----
+router.post('/:id/consent', verifyToken, ensureActive, async (req, res) => {
+  try {
+    const { consent } = req.body || {};
+    const doc = await Document.findOne({ _id: req.params.id, user: req.userId });
+    if (!doc) return res.status(404).json({ message: 'Document not found' });
+    if (!doc.sensitiveFound) {
+      return res.json({ message: 'No sensitive data detected; indexing already complete or not required.', requireConfirmation: false });
+    }
+    if (!consent) {
+      doc.consentConfirmed = false;
+      doc.processingStatus = 'awaiting-consent';
+      await doc.save();
+      return res.json({ message: 'Consent declined. Please upload a cleaned document.', requireConfirmation: false });
+    }
+    // Mark consent and trigger indexing again
+    doc.consentConfirmed = true;
+    doc.processingStatus = 'indexing';
+    doc.processingError = '';
+    await doc.save();
+    triggerIndexing(doc._id).catch(()=>{});
+    return res.json({ message: 'Consent recorded. Indexing will complete shortly.', requireConfirmation: false });
+  } catch (err) {
+    return res.status(500).json({ message: err?.message || 'Consent update failed' });
+  }
+});
+
+// ---- Internal metadata (Flask) ----
+router.get('/:id/_meta', async (req, res) => {
+  try {
+    const svc = process.env.SERVICE_TOKEN || 'smartdoc-service-token';
+    const provided = req.header('x-service-token');
+    if (!provided || provided !== svc) return res.status(403).json({ message: 'Forbidden' });
+    const doc = await Document.findById(req.params.id).select('sensitiveFound consentConfirmed sensitiveSummary processingStatus');
+    if (!doc) return res.status(404).json({ message: 'Not found' });
+    res.json({
+      sensitiveFound: !!doc.sensitiveFound,
+      consentConfirmed: !!doc.consentConfirmed,
+      sensitiveSummary: doc.sensitiveSummary || {},
+      processingStatus: doc.processingStatus
+    });
+  } catch (err) {
+    res.status(500).json({ message: err?.message || 'Meta fetch failed' });
+  }
+});
+
 
 // ---- Replace text content and reindex (incremental update for text documents) ----
 router.patch("/:id/text", verifyToken, ensureActive, async (req, res) => {

@@ -17,7 +17,12 @@ const documentSchema = new mongoose.Schema({
   originalType: { type: String }, // Original mimetype if converted
   // Persistent pin state per user/document
   pinned: { type: Boolean, default: false },
-  pinnedAt: { type: Date }
+  pinnedAt: { type: Date },
+  // Sensitive data / consent persistence (avoids Flask in-memory loss)
+  sensitiveFound: { type: Boolean, default: false },
+  consentConfirmed: { type: Boolean, default: false },
+  sensitiveSummary: { type: mongoose.Schema.Types.Mixed },
+  lastScanAt: { type: Date },
 });
 
 // Populate doc_id with this._id if not set, to avoid null values
