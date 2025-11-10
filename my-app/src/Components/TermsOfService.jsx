@@ -33,7 +33,7 @@ export default function TermsOfService() {
             </li>
             <li>
               This includes creation and storage of derived data (e.g., text extracts
-              and vector embeddings in Chroma DB) and temporary caches (e.g., previews
+              and vector embeddings in Qdrant Cloud) and temporary caches (e.g., previews
               under pdf_cache/ via the Flask service).
             </li>
           </ul>

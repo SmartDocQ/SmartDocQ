@@ -428,10 +428,7 @@ function PlainTextPreview({ file, documentId, filename, onTextSaved }) {
         const msg = data?.message || data?.error || "Save failed";
         throw new Error(msg);
       }
-      // Preserve sensitive content message, but still show success edit toast
-      if (data?.requireConfirmation) {
-        showToast && showToast("Sensitive content detected; indexing paused until you consent.", { type: "info" });
-      }
+      // Removed sensitive content informational toast per user request
       setText(editedText);
       setIsEditing(false);
       setStatus("saved");

@@ -49,8 +49,8 @@ export default function PrivacyPolicy() {
               by your deployment.
             </li>
             <li>
-              Vector embeddings for search/Q&A are stored in a local Chroma DB (chroma_db/) so
-              the system can answer quickly without reprocessing.
+              Vector embeddings for search/Q&A are stored in a managed Qdrant Cloud collection,
+              enabling fast semantic retrieval without reprocessing and resilient persistence.
             </li>
             <li>
               Preview/cache artifacts (e.g., converted PDFs) may be produced by a small Flask

@@ -7,7 +7,15 @@ import google.generativeai as genai
 from quiz import quiz_bp, init_quiz
 from flashcard import flashcard_bp, init_flashcards
 from summarize import init_summarizer, summarize_bp
-import chromadb
+from vector_store_qdrant import (
+    upsert_chunks,
+    delete_doc as vs_delete_doc,
+    has_doc as vs_has_doc,
+    query_doc as vs_query_doc,
+    list_docs as vs_list_docs,
+    health as vs_health,
+    update_filename as vs_update_filename,
+)
 import requests
 import tempfile, os, importlib
 import hashlib
@@ -63,42 +71,17 @@ if GEMINI_API_KEY:
 TEXT_MODEL = os.environ.get("TEXT_MODEL", "models/gemini-2.5-flash")  
 EMBED_MODEL = os.environ.get("EMBED_MODEL", "models/text-embedding-004")
 
-CHROMA_DB_PATH = os.environ.get("CHROMA_DB_PATH", os.path.join(os.getcwd(), "chroma_db"))
-
 def _ensure_dir(p: str) -> str:
     try:
         os.makedirs(p, exist_ok=True)
         return p
     except Exception as e:
-        print("[Chroma] Failed to create directory", p, "=>", e)
+        print("[VectorStore] Failed to create directory", p, "=>", e)
         return ""
 
-def _init_chroma_client():
-    env_path = os.path.abspath(CHROMA_DB_PATH)
-    if _ensure_dir(env_path):
-        try:
-            cli = chromadb.PersistentClient(path=env_path)
-            print(f"[Chroma] Persistent path: {env_path}")
-            return cli
-        except Exception as e:
-            print("[Chroma] PersistentClient failed for", env_path, "=>", e)
-    default_path = os.path.abspath(os.path.join(os.getcwd(), "chroma_db"))
-    if _ensure_dir(default_path):
-        try:
-            cli = chromadb.PersistentClient(path=default_path)
-            print(f"[Chroma] Fallback persistent path: {default_path}")
-            return cli
-        except Exception as e:
-            print("[Chroma] PersistentClient failed for default path", default_path, "=>", e)
-    try:
-        cli = chromadb.EphemeralClient()
-        print("[Chroma] Using EphemeralClient (no persistence)")
-        return cli
-    except Exception as e:
-        raise e
-
-chroma_client = _init_chroma_client()
-collection = chroma_client.get_or_create_collection("documents")
+def vector_store_health() -> dict:
+    # Returns Qdrant health
+    return vs_health()
 
 def contains_link(text):
     return bool(URL_REGEX.search(text))
@@ -336,7 +319,8 @@ def generate_embeddings(text, timeout_sec: int = 20):
 # ---- HEALTHCHECK ----
 @app.route("/healthz", methods=["GET"]) 
 def healthz():
-    return jsonify({"status": "ok"})
+    # Extend health with vector store state
+    return jsonify({"status": "ok", "vectorStore": vector_store_health()})
 
 # ---- ROOT ----
 @app.route("/", methods=["GET", "HEAD"]) 
@@ -500,20 +484,8 @@ def preview_word_as_pdf(doc_id):
 # ---- MY DOCS ----
 @app.route("/api/document/my", methods=["GET"])
 def list_docs():
-    result = collection.get()
-    metas = result.get("metadatas", []) or []
-    docs = {}
-    for m in metas:
-        if not m:
-            continue
-        doc_id = m.get("doc_id")
-        if not doc_id:
-            continue
-        name = m.get("filename", "unknown")
-        if doc_id not in docs:
-            ext = (name.rsplit(".", 1)[-1].lower() if "." in name else "text")
-            docs[doc_id] = {"_id": doc_id, "name": name, "type": ext, "size": 0}
-    return jsonify(list(docs.values()))
+    docs = vs_list_docs()
+    return jsonify(docs)
 
 # ---- RENAME ----
 @app.route("/api/document/<doc_id>", methods=["PUT"])
@@ -522,19 +494,16 @@ def rename_doc(doc_id):
     new_name = data.get("name", "").strip()
     if not new_name:
         return jsonify({"error": "Missing new name"}), 400
-    all_meta = collection.get()["metadatas"]
-    for m in all_meta:
-        if m and m.get("doc_id") == doc_id:
-            m["filename"] = new_name
-    return jsonify({"message": "Renamed successfully"})
+    try:
+        vs_update_filename(doc_id, new_name)
+        return jsonify({"message": "Renamed successfully"})
+    except Exception as e:
+        return jsonify({"message": f"Rename failed: {e}"}), 500
 
 # ---- DELETE ----
 @app.route("/api/document/<doc_id>", methods=["DELETE"])
 def delete_doc(doc_id):
-    all_ids = collection.get()["ids"]
-    to_delete = [i for i in all_ids if i.startswith(doc_id)]
-    if to_delete:
-        collection.delete(ids=to_delete)
+    vs_delete_doc(doc_id)
     return jsonify({"message": "Deleted successfully"})
 
 # ---- ASK ----
@@ -671,15 +640,9 @@ Question: {orig_q}
             return jsonify({"error": "Failed to generate embedding"}), 500
 
 
-        results = collection.query(
-            query_embeddings=[q_emb],
-            n_results=12,
-            where={"doc_id": doc_id},
-            include=["documents", "distances"]
-        )
-
-        docs = results.get("documents", [[]])[0] or []
-        dists = results.get("distances", [[]])[0] or []
+        qdrant_results = vs_query_doc(doc_id, q_emb, top_k=12)
+        docs = [r[0] for r in qdrant_results]
+        dists = [1.0 - r[1] for r in qdrant_results]  # convert similarity to distance heuristic
 
         def _keywords(s: str):
             stop = {"the","a","an","and","or","of","in","on","to","for","is","are","was","were","be","with","by","at","from","as","that","this","it","its","if","then","than","into","about","over","under","within","between"}
@@ -877,9 +840,7 @@ def _start_background_indexing(doc_id: str):
     th.start()
 
 def has_index(doc_id: str) -> bool:
-    res = collection.get(where={"doc_id": doc_id})
-    ids = res.get("ids", [])
-    return bool(ids)
+    return vs_has_doc(doc_id)
 
 def index_bytes(doc_id: str, filename: str, mimetype: str, data: bytes):
     text = ""
@@ -898,11 +859,8 @@ def index_bytes(doc_id: str, filename: str, mimetype: str, data: bytes):
         return False, 0
 
     try:
-        existing = collection.get(where={"doc_id": doc_id}) or {}
-        existing_ids = existing.get("ids", []) or []
-        if existing_ids:
-            collection.delete(ids=existing_ids)
-    except Exception as _:
+        vs_delete_doc(doc_id)
+    except Exception:
         pass
 
     sections = split_sheet_sections(text)
@@ -916,16 +874,20 @@ def index_bytes(doc_id: str, filename: str, mimetype: str, data: bytes):
     batch_ids = []
 
     def flush_batch():
-        nonlocal added, batch_embeddings, batch_documents, batch_metadatas, batch_ids
+        nonlocal added, batch_embeddings, batch_documents, batch_metadatas, batch_ids, chunk_records
         if not batch_ids:
             return
-        collection.add(
-            embeddings=batch_embeddings,
-            documents=batch_documents,
-            metadatas=batch_metadatas,
-            ids=batch_ids,
-        )
-        added += len(batch_ids)
+        # Prepare chunk_records with embeddings for Qdrant upsert
+        enriched = []
+        for emb, doc_txt, meta, cid in zip(batch_embeddings, batch_documents, batch_metadatas, batch_ids):
+            enriched.append({
+                'embedding': emb,
+                'text': doc_txt,
+                'chunk': meta.get('chunk'),
+                'sheet': meta.get('sheet'),
+            })
+        vs_added = upsert_chunks(doc_id, filename, enriched)
+        added += vs_added
         batch_embeddings = []
         batch_documents = []
         batch_metadatas = []
@@ -972,10 +934,7 @@ def index_text(doc_id: str, filename: str, text: str):
         return False, 0
 
     try:
-        existing = collection.get(where={"doc_id": doc_id}) or {}
-        existing_ids = existing.get("ids", []) or []
-        if existing_ids:
-            collection.delete(ids=existing_ids)
+        vs_delete_doc(doc_id)
     except Exception:
         pass
 
@@ -990,16 +949,19 @@ def index_text(doc_id: str, filename: str, text: str):
     batch_ids = []
 
     def flush_batch():
-        nonlocal added, batch_embeddings, batch_documents, batch_metadatas, batch_ids
+        nonlocal added, batch_embeddings, batch_documents, batch_metadatas, batch_ids, chunk_records
         if not batch_ids:
             return
-        collection.add(
-            embeddings=batch_embeddings,
-            documents=batch_documents,
-            metadatas=batch_metadatas,
-            ids=batch_ids,
-        )
-        added += len(batch_ids)
+        enriched = []
+        for emb, doc_txt, meta, cid in zip(batch_embeddings, batch_documents, batch_metadatas, batch_ids):
+            enriched.append({
+                'embedding': emb,
+                'text': doc_txt,
+                'chunk': meta.get('chunk'),
+                'sheet': meta.get('sheet'),
+            })
+        vs_added = upsert_chunks(doc_id, filename or 'document.txt', enriched)
+        added += vs_added
         batch_embeddings = []
         batch_documents = []
         batch_metadatas = []
@@ -1125,7 +1087,7 @@ def replace_text_index():
 
 try:
     init_quiz(
-        collection,
+        None,  # collection no longer needed directly
         has_index,
         fetch_doc_from_node,
         extract_text_for_mimetype,
@@ -1138,7 +1100,7 @@ except Exception as _e:
 
 try:
     init_flashcards(
-        collection,
+        None,
         has_index,
         fetch_doc_from_node,
         extract_text_for_mimetype,
