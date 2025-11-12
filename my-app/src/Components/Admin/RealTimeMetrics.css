@@ -5,11 +5,11 @@
 .rtm-refresh:active{transform:scale(0.98)}
 
 .rtm-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
-.rtm-card{background:#0f1115;border:1px solid #1f2937;border-radius:14px;padding:16px;box-shadow:0 1px 2px rgba(0,0,0,.2);transition:transform .15s ease,box-shadow .2s ease}
+.rtm-card{background:#0f1115;border:1px solid #1f2937;border-radius:14px;padding:16px;box-shadow:0 1px 2px rgba(0,0,0,.2);transition:transform .15s ease,box-shadow .2s ease;display:flex;flex-direction:column;align-items:center;text-align:center}
 .rtm-card:hover{transform:translateY(-2px);box-shadow:0 6px 12px rgba(0,0,0,.3)}
-.rtm-label{font-size:12px;letter-spacing:.06em;color:#9ca3af;text-transform:uppercase;margin-bottom:6px}
-.rtm-value{font-size:28px;font-weight:800;color:#e5e7eb;margin-bottom:6px}
-.rtm-mini{height:40px}
+.rtm-label{font-size:12px;letter-spacing:.06em;color:#9ca3af;text-transform:uppercase;margin-bottom:6px;text-align:center}
+.rtm-value{font-size:28px;font-weight:800;color:#e5e7eb;margin-bottom:6px;text-align:center}
+.rtm-mini{height:40px;width:100%}
 
 .rtm-charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
 .rtm-chart-card{background:#0f1115;border:1px solid #1f2937;border-radius:14px;padding:16px}
