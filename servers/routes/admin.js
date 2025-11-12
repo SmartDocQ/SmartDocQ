@@ -5,6 +5,7 @@ const Document = require("../models/Document");
 const Chat = require("../models/Chat");
 const ContactReport = require("../models/ContactReport");
 const { verifyToken } = require("./auth");
+const fetch = require("node-fetch");
 const mongoose = require("mongoose");
 const cloudinary = require('cloudinary').v2;
 
@@ -197,12 +198,126 @@ router.get("/dashboard", verifyToken, isAdmin, async (req, res) => {
       documentId: doc._id
     }));
     
-    // Mock system health (in production, get real metrics)
-    const systemHealth = {
-      cpuUsage: Math.floor(Math.random() * 60) + 20, // 20-80%
-      memoryUsage: Math.floor(Math.random() * 50) + 30, // 30-80%
-      diskUsage: Math.floor(Math.random() * 40) + 20 // 20-60%
-    };
+    // ===== Pull runtime metrics from /metrics and compute summaries + percentiles =====
+    let performance = undefined;
+    try {
+      const baseUrl = `${req.protocol}://${req.get("host")}`;
+      const resp = await fetch(`${baseUrl}/metrics`);
+      if (resp.ok) {
+        const text = await resp.text();
+        let totalCount = 0;
+        let totalSum = 0;
+        let successCount = 0;
+        let uptimeSeconds = 0;
+        let cpuUser = 0;
+        let cpuSystem = 0;
+        let memRss = 0;
+        const overallBuckets = new Map(); // le(string)=>count (cumulative)
+        const routeBuckets = new Map();   // route=> Map(le=>count)
+        const routeCounts = new Map();    // route=> count
+        const lines = text.split(/\n+/);
+        for (const line of lines) {
+          if (!line || line.startsWith("#")) continue;
+          if (line.startsWith("http_request_duration_seconds_bucket")) {
+            const labelsStr = line.slice(line.indexOf("{") + 1, line.indexOf("}"));
+            const parts = labelsStr.split(",").map(s => s.trim());
+            const labels = {};
+            for (const p of parts) {
+              const eq = p.indexOf("=");
+              if (eq > 0) {
+                const k = p.slice(0, eq);
+                const v = p.slice(eq + 1).replace(/^\"|\"$/g, "");
+                labels[k] = v;
+              }
+            }
+            const le = labels.le;
+            const route = labels.route || 'unknown';
+            const val = parseFloat(line.substring(line.lastIndexOf(" ")+1));
+            if (!Number.isNaN(val) && le != null) {
+              overallBuckets.set(String(le), (overallBuckets.get(String(le)) || 0) + val);
+              if (!routeBuckets.has(route)) routeBuckets.set(route, new Map());
+              const rb = routeBuckets.get(route);
+              rb.set(String(le), (rb.get(String(le)) || 0) + val);
+            }
+            continue;
+          }
+          if (line.startsWith("http_request_duration_seconds_sum")) {
+            const val = parseFloat(line.substring(line.lastIndexOf(" ")+1));
+            if (!Number.isNaN(val)) totalSum += val;
+          } else if (line.startsWith("http_request_duration_seconds_count")) {
+            const val = parseFloat(line.substring(line.lastIndexOf(" ")+1));
+            if (!Number.isNaN(val)) totalCount += val;
+            if (line.includes('status_code="200"') || line.includes('status_code="201"') || line.includes('status_code="204"')) {
+              if (!Number.isNaN(val)) successCount += val;
+            }
+            const braceStart = line.indexOf('{');
+            if (braceStart !== -1) {
+              const labelsStr2 = line.slice(braceStart + 1, line.indexOf('}', braceStart));
+              const parts2 = labelsStr2.split(',').map(s => s.trim());
+              let route2 = 'unknown';
+              for (const p of parts2) {
+                const eq = p.indexOf('=');
+                if (eq > 0) {
+                  const k = p.slice(0, eq);
+                  const v = p.slice(eq + 1).replace(/^\"|\"$/g, "");
+                  if (k === 'route') route2 = v;
+                }
+              }
+              routeCounts.set(route2, (routeCounts.get(route2) || 0) + (Number.isNaN(val) ? 0 : val));
+            }
+          } else if (line.startsWith("process_uptime_seconds")) {
+            const val = parseFloat(line.substring(line.lastIndexOf(" ")+1));
+            if (!Number.isNaN(val)) uptimeSeconds = val;
+          } else if (line.startsWith("process_cpu_user_seconds_total")) {
+            const val = parseFloat(line.substring(line.lastIndexOf(" ")+1));
+            if (!Number.isNaN(val)) cpuUser = val;
+          } else if (line.startsWith("process_cpu_system_seconds_total")) {
+            const val = parseFloat(line.substring(line.lastIndexOf(" ")+1));
+            if (!Number.isNaN(val)) cpuSystem = val;
+          } else if (line.startsWith("process_resident_memory_bytes")) {
+            const val = parseFloat(line.substring(line.lastIndexOf(" ")+1));
+            if (!Number.isNaN(val)) memRss = val;
+          }
+        }
+        const meanLatencyMs = totalCount > 0 ? Math.round((totalSum / totalCount) * 1000) : undefined;
+        const successRate = totalCount > 0 ? Math.round((successCount / totalCount) * 10000) / 100 : undefined;
+        const cpuPct = uptimeSeconds > 0 ? Math.min(100, Math.round(((cpuUser + cpuSystem) / uptimeSeconds) * 100)) : undefined;
+        if (!uptimeSeconds || !Number.isFinite(uptimeSeconds)) uptimeSeconds = Math.round(process.uptime());
+
+        const overallEntries = Array.from(overallBuckets.entries()).map(([le, c]) => [le === '+Inf' ? Infinity : Number(le), Number(c)]).sort((a,b)=>a[0]-b[0]);
+        function perc(entries, total, p) { if (!total) return 0; const t = total * p; for (const [le, c] of entries) { if (c >= t) return le; } return 0; }
+        const p50ms = Math.round(perc(overallEntries, totalCount, 0.5) * 1000);
+        const p90ms = Math.round(perc(overallEntries, totalCount, 0.9) * 1000);
+        const p99ms = Math.round(perc(overallEntries, totalCount, 0.99) * 1000);
+
+        const byRouteArr = [];
+        for (const [route, buckets] of routeBuckets.entries()) {
+          const entries = Array.from(buckets.entries()).map(([le, c]) => [le === '+Inf' ? Infinity : Number(le), Number(c)]).sort((a,b)=>a[0]-b[0]);
+          const count = routeCounts.get(route) || 0;
+          const p90 = Math.round(perc(entries, count, 0.9) * 1000);
+          byRouteArr.push({ route, count, p90Ms: p90 });
+        }
+        byRouteArr.sort((a,b)=>b.count - a.count);
+        const topRoutes = byRouteArr.slice(0, 5);
+
+        performance = {
+          documentProcessingTime: meanLatencyMs || 150, // mean
+          queryResponseTime: p90ms || meanLatencyMs || 0, // p90 as proxy
+          successRate: successRate ?? 0,
+          percentiles: { p50: p50ms, p90: p90ms, p99: p99ms },
+          _runtime: {
+            uptimeSec: uptimeSeconds,
+            cpuPercent: cpuPct,
+            memoryRssMB: Math.round(memRss / (1024*1024)),
+            heapUsedMB: Math.round(process.memoryUsage().heapUsed / (1024*1024)),
+            requestsTotal: totalCount
+          },
+          byRoute: topRoutes
+        };
+      }
+    } catch (e) {
+      // Ignore metrics errors; keep dashboard resilient
+    }
 
     // ===== Weekly growth metrics (last 7 days by weekday) =====
     const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -250,7 +365,7 @@ router.get("/dashboard", verifyToken, isAdmin, async (req, res) => {
       storageGrowth: storageUsed * 0.1,
       conversionTrend: 95,
       recentActivities,
-      systemHealth
+      performance
     };
     // Attach weekly growth maps
     stats.weeklyUserGrowth = weeklyUserGrowth;
@@ -499,9 +614,6 @@ router.get("/logs", verifyToken, isAdmin, async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 50;
     const level = req.query.level || "";
-    
-    // In a real application, you would fetch from actual log files or logging service
-    // For now, we'll generate mock logs based on recent database activity
     
     const recentDocs = await Document.find()
       .populate("user", "username")
