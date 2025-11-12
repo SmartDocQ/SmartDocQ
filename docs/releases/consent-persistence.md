@@ -1,7 +1,7 @@
-# SmartDocQ Backend Update — Durable Consent Persistence & Gating (v2.1.3)
+# SmartDocQ Backend Update — Durable Consent Persistence & Cross-Service Gating (v2.1.3)
 
 **Date:** 2025-11-10   
-**Module:** Node.js (Express) + Flask backend  
+**Modules:** Node.js (Express, folder: `servers/`) + Flask backend (folder: `backend/`)  
 **Category:** Data Governance · Security Compliance · Reliability  
 
 ---
@@ -37,25 +37,43 @@ Consent gating now functions across all Flask instances and survives restarts or
 
 1. **MongoDB Schema Update**
    - Added persistent fields to the `Document` schema:  
-     `sensitiveFound`, `consentConfirmed`, `sensitiveSummary`, `lastScanAt`.  
+     `sensitiveFound` (Boolean), `consentConfirmed` (Boolean), `sensitiveSummary` (String), `lastScanAt` (Date).  
    - Each document now retains its consent state permanently.
 
-2. **Node Backend Enhancements**
-   - Enhanced `triggerIndexing` in `document.js` to interpret Flask response states (`awaiting-consent`, `done`, `failed`).  
+2. **Node Backend Enhancements** (folder: `servers/`)
+   - Enhanced indexing flow in `routes/document.js` to interpret Flask response states (`awaiting-consent`, `done`, `failed`).  
    - Added a new user consent route:  
      `POST /api/document/:id/consent` — updates MongoDB and re-triggers indexing after user confirmation.  
-   - Added an internal metadata endpoint:  
-     `GET /api/document/:id/_meta` (service-token secured) for Flask to fetch consent state.
+   - Added an internal metadata endpoint (for Flask only):  
+     `GET /api/document/:id/_meta` — secured via header `x-service-token: <SERVICE_TOKEN>`; Flask uses it to fetch authoritative consent state.  
+   - CORS allow-list updated to include `x-service-token` in `servers/server.js` so internal calls are accepted.
 
-3. **Flask Service Updates**
-   - Integrated consent check in `/api/index-from-atlas` using the Node metadata fetcher.  
-   - Added `fetch_doc_meta_from_node()` to obtain document consent details from Node.  
-   - Added internal persistence handling when Flask receives `/api/document/consent`.  
+3. **Flask Service Updates** (folder: `backend/`)
+   - Integrated consent check in `/api/index-from-atlas` by calling the Node metadata endpoint before any indexing.  
+   - Added `fetch_doc_meta_from_node()` (sends `x-service-token`) to obtain consent details from Node.  
    - Modified upload and batch upload logic to initiate sensitive scan/index and gracefully handle fallback.
 
 4. **Quality Assurance**
    - All syntax, linter, and runtime checks passed successfully.  
    - End-to-end tests confirmed durable consent persistence across container restarts and redeployments.
+
+---
+
+## API Contract (Quick Reference)
+
+- POST `/api/document/:id/consent`
+   - Auth: user token (normal app auth)
+   - Body: `{ "consentConfirmed": true }`
+   - Effect: Persists consent on the document and re-triggers indexing when `true`.
+
+- GET `/api/document/:id/_meta`
+   - Auth: internal service call only  
+   - Headers: `x-service-token: <SERVICE_TOKEN>`  
+   - Response: `{ sensitiveFound, consentConfirmed, sensitiveSummary, lastScanAt }`
+
+Environment variables
+- `SERVICE_TOKEN` (shared secret between Node and Flask for internal calls)
+- `MONGO_URI` (MongoDB Atlas)
 
 ---
 
@@ -106,12 +124,12 @@ Consent gating now functions across all Flask instances and survives restarts or
 
 | File | Description |
 |------|--------------|
-| `backend/main.py` | Added consent gating and Node metadata fetch |
-| `backend/routes/document.js` | Added consent route and indexing logic |
-| `models/Document.js` | Added durable consent fields |
-| `backend/templates` | Updated workflows for consent-aware processing |
+| `backend/main.py` | Flask: consent gating + Node metadata fetch |
+| `servers/routes/document.js` | Node: consent route + indexing orchestration |
+| `servers/models/Document.js` | Node/Mongoose: durable consent fields |
+| `servers/server.js` | CORS allow `x-service-token` for internal calls |
 
 ---
 
 **Status:** Completed and Verified  
-**Deployment:** Cloud Run (Flask), Render (Node), MongoDB Atlas  
+**Deployment:** Flask (Cloud Run or equivalent), Node (Render/Heroku/VM), MongoDB Atlas  
