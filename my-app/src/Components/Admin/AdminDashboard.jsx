@@ -49,9 +49,39 @@ const AdminDashboard = () => {
     fetchAdminData();
   }, [fetchAdminData]);
 
+  // Auto-refresh metrics when on the Real Metrics tab (silent refresh, no spinner)
+  useEffect(() => {
+    if (activeTab !== "realtime") return;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch(apiUrl("/api/admin/dashboard"), {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (!cancelled) setAdminData(data);
+        }
+      } catch (_) {
+        // ignore silent refresh errors
+      }
+    };
+    const id = setInterval(tick, 15000); // 15s cadence
+    // initial silent refresh
+    tick();
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [activeTab]);
+
   const tabs = [
     { id: "dashboard", label: "Dashboard" },
-    { id: "realtime", label: "Real Metrics" },
+    { id: "realtime", label: "Real Time Metrics" },
     { id: "users", label: "Users" },
     { id: "reports", label: "Reports" },
     { id: "logs", label: "System Logs" },

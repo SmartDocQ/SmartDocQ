@@ -81,17 +81,6 @@ const RealTimeMetrics = ({ stats, onRefresh }) => {
       </div>
 
       <div className="rtm-grid">
-        <div className="rtm-card">
-          <div className="rtm-label">Online Users</div>
-          <div className="rtm-value">{enhanced.onlineUsers || 0}</div>
-          <div className="rtm-mini">
-            <ResponsiveContainer width="100%" height={40}>
-              <BarChart data={userGrowthData.slice(-3)}>
-                <Bar dataKey="newUsers" fill="#00FF88" radius={[2,2,0,0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
 
         <div className="rtm-card">
           <div className="rtm-label">Document Processing</div>

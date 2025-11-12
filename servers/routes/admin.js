@@ -247,21 +247,25 @@ router.get("/dashboard", verifyToken, isAdmin, async (req, res) => {
           } else if (line.startsWith("http_request_duration_seconds_count")) {
             const val = parseFloat(line.substring(line.lastIndexOf(" ")+1));
             if (!Number.isNaN(val)) totalCount += val;
-            if (line.includes('status_code="200"') || line.includes('status_code="201"') || line.includes('status_code="204"')) {
-              if (!Number.isNaN(val)) successCount += val;
-            }
             const braceStart = line.indexOf('{');
             if (braceStart !== -1) {
               const labelsStr2 = line.slice(braceStart + 1, line.indexOf('}', braceStart));
               const parts2 = labelsStr2.split(',').map(s => s.trim());
               let route2 = 'unknown';
+              let statusCodeStr = undefined;
               for (const p of parts2) {
                 const eq = p.indexOf('=');
                 if (eq > 0) {
                   const k = p.slice(0, eq);
                   const v = p.slice(eq + 1).replace(/^\"|\"$/g, "");
                   if (k === 'route') route2 = v;
+                  if (k === 'status_code') statusCodeStr = v;
                 }
+              }
+              // Count 2xx as success (200-299)
+              const sc = Number(statusCodeStr);
+              if (!Number.isNaN(sc) && sc >= 200 && sc < 300 && !Number.isNaN(val)) {
+                successCount += val;
               }
               routeCounts.set(route2, (routeCounts.get(route2) || 0) + (Number.isNaN(val) ? 0 : val));
             }
