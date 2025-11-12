@@ -12,8 +12,7 @@ import {
   ResponsiveContainer
 } from "recharts";
 
-// Constant days list outside component to avoid React hook dependency warnings
-const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+// (Removed DAYS and userGrowthData spark since not used in UI)
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
@@ -52,10 +51,7 @@ const RealTimeMetrics = ({ stats, onRefresh }) => {
     return [{ time: Math.round(t * 0.95) }, { time: Math.round(t * 1.02) }, { time: t }];
   }, [perf.queryResponseTime]);
 
-  const userGrowthData = useMemo(() => {
-    const map = enhanced.weeklyUserGrowth || {};
-    return DAYS.map(d => ({ name: d, newUsers: map[d] || 0 }));
-  }, [enhanced.weeklyUserGrowth]);
+  // (Removed userGrowthData to avoid unused var lint error)
 
   const latencyPercentiles = useMemo(() => {
     const p = perf.percentiles || {};
