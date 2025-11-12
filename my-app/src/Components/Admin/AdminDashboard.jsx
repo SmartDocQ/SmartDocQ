@@ -51,6 +51,7 @@ const AdminDashboard = () => {
 
   const tabs = [
     { id: "dashboard", label: "Dashboard" },
+    { id: "realtime", label: "Real Metrics" },
     { id: "users", label: "Users" },
     { id: "reports", label: "Reports" },
     { id: "logs", label: "System Logs" },
@@ -69,21 +70,14 @@ const AdminDashboard = () => {
 
     switch (activeTab) {
       case "dashboard": return (
-        <>
-          <RealTimeMetrics stats={adminData.stats} onRefresh={fetchAdminData} />
-          <AdminStats data={adminData.stats} onRefresh={fetchAdminData} />
-        </>
+        <AdminStats data={adminData.stats} onRefresh={fetchAdminData} />
       );
+      case "realtime": return <RealTimeMetrics stats={adminData.stats} onRefresh={fetchAdminData} />;
       case "users": return <UserManagement users={adminData.users} onRefresh={fetchAdminData} />;
   case "reports": return <ReportManagement reports={adminData.reports} onRefresh={fetchAdminData} />;
       case "logs": return <SystemLogs logs={adminData.logs} onRefresh={fetchAdminData} />;
       case "settings": return <SystemSettings settings={adminData.settings} onRefresh={fetchAdminData} />;
-      default: return (
-        <>
-          <RealTimeMetrics stats={adminData.stats} onRefresh={fetchAdminData} />
-          <AdminStats data={adminData.stats} onRefresh={fetchAdminData} />
-        </>
-      );
+      default: return <AdminStats data={adminData.stats} onRefresh={fetchAdminData} />;
     }
   };
 
