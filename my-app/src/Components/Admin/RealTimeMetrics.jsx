@@ -12,6 +12,9 @@ import {
   ResponsiveContainer
 } from "recharts";
 
+// Constant days list outside component to avoid React hook dependency warnings
+const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
@@ -49,10 +52,9 @@ const RealTimeMetrics = ({ stats, onRefresh }) => {
     return [{ time: Math.round(t * 0.95) }, { time: Math.round(t * 1.02) }, { time: t }];
   }, [perf.queryResponseTime]);
 
-  const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   const userGrowthData = useMemo(() => {
     const map = enhanced.weeklyUserGrowth || {};
-    return days.map(d => ({ name: d, newUsers: map[d] || 0 }));
+    return DAYS.map(d => ({ name: d, newUsers: map[d] || 0 }));
   }, [enhanced.weeklyUserGrowth]);
 
   const latencyPercentiles = useMemo(() => {
