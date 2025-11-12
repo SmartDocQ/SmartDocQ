@@ -81,10 +81,6 @@ const AdminStats = ({ data, onRefresh }) => {
     };
   }, [data]);
 
-  // Runtime metrics from backend (uptime, cpu, memory, requests)
-  const runtime = useMemo(() => {
-    return enhancedStats.performance?._runtime || {};
-  }, [enhancedStats.performance]);
 
   // Memoized weekly data generation
   const userGrowthData = useMemo(() => {
@@ -116,26 +112,7 @@ const AdminStats = ({ data, onRefresh }) => {
       ];
     }, [enhancedStats.feedbackSummary]);
 
-    // Small sparkline datasets for real-time performance metrics
-    const docProcessingSpark = useMemo(() => {
-      const t = enhancedStats.performance?.documentProcessingTime || 0;
-      if (!t) return [];
-      return [
-        { time: Math.round(t * 0.9) },
-        { time: Math.round(t * 1.05) },
-        { time: t }
-      ];
-    }, [enhancedStats.performance?.documentProcessingTime]);
-
-    const queryResponseSpark = useMemo(() => {
-      const t = enhancedStats.performance?.queryResponseTime || 0;
-      if (!t) return [];
-      return [
-        { time: Math.round(t * 0.95) },
-        { time: Math.round(t * 1.02) },
-        { time: t }
-      ];
-    }, [enhancedStats.performance?.queryResponseTime]);
+    // (Real-time sparklines moved to RealTimeMetrics component)
 
   // Memoized stat cards
   const statCards = useMemo(() => [
@@ -169,21 +146,7 @@ const AdminStats = ({ data, onRefresh }) => {
     }
   ], [enhancedStats]);
 
-  // Percentiles data for chart
-  const latencyPercentiles = useMemo(() => {
-    const p = enhancedStats.performance?.percentiles || {};
-    return [
-      { name: 'p50', ms: Math.round(p.p50 || 0) },
-      { name: 'p90', ms: Math.round(p.p90 || 0) },
-      { name: 'p99', ms: Math.round(p.p99 || 0) }
-    ];
-  }, [enhancedStats.performance?.percentiles]);
-
-  // By-route p90 (top routes)
-  const byRouteData = useMemo(() => {
-    const r = enhancedStats.performance?.byRoute || [];
-    return r.map(x => ({ route: x.route || 'unknown', p90: x.p90Ms || 0, count: x.count || 0 }));
-  }, [enhancedStats.performance?.byRoute]);
+  // (Latency percentiles and by-route p90 moved to RealTimeMetrics component)
 
   return (
     <div className="admin-stats">
@@ -311,136 +274,9 @@ const AdminStats = ({ data, onRefresh }) => {
           </ResponsiveContainer>
         </div>
 
-        {/* Latency Percentiles */}
-        <div className="chart-container">
-          <h3 className="chart-title">Latency Percentiles (ms)</h3>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={latencyPercentiles}>
-              <CartesianGrid strokeDasharray="2 2" stroke="#333" />
-              <XAxis dataKey="name" stroke="#888" />
-              <YAxis stroke="#888" allowDecimals={false} />
-              <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="ms" fill="#00BFFF" radius={[3,3,0,0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Top Routes by p90 */}
-        <div className="chart-container">
-          <h3 className="chart-title">Top Routes p90 (ms)</h3>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={byRouteData}>
-              <CartesianGrid strokeDasharray="2 2" stroke="#333" />
-              <XAxis dataKey="route" stroke="#888" interval={0} angle={-20} textAnchor="end" height={60} tickFormatter={(v)=> (v && v.length>18 ? v.slice(0,18)+"…" : v)} />
-              <YAxis stroke="#888" allowDecimals={false} />
-              <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="p90" fill="#FF6B35" radius={[3,3,0,0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        {/* (Latency Percentiles and Top Routes p90 now shown in RealTimeMetrics) */}
       </div>
-
-      {/* Real-time Metrics */}
-      <div className="realtime-section">
-        <h3 className="section-title">Real-time Metrics</h3>
-        <div className="metrics-grid">
-          <div className="metric-item">
-            <div className="metric-label">Online Users</div>
-            <div className="metric-value">{enhancedStats.onlineUsers || 0}</div>
-            <div className="metric-chart">
-              <ResponsiveContainer width="100%" height={50}>
-                <BarChart data={userGrowthData.slice(-3)}>
-                  <Bar dataKey="newUsers" fill="#00FF88" radius={[1, 1, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-          
-          <div className="metric-item">
-            <div className="metric-label">Document Processing</div>
-            <div className="metric-value">{enhancedStats.performance?.documentProcessingTime || 0}ms</div>
-            <div className="metric-chart">
-              <ResponsiveContainer width="100%" height={50}>
-                <LineChart data={docProcessingSpark}>
-                  <Line type="monotone" dataKey="time" stroke="#00BFFF" strokeWidth={1.5} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-          
-          <div className="metric-item">
-            <div className="metric-label">Query Response</div>
-            <div className="metric-value">{enhancedStats.performance?.queryResponseTime || 0}ms</div>
-            <div className="metric-chart">
-              <ResponsiveContainer width="100%" height={50}>
-                <LineChart data={queryResponseSpark}>
-                  <Line type="monotone" dataKey="time" stroke="#FF6B35" strokeWidth={1.5} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-          
-          <div className="metric-item">
-            <div className="metric-label">Success Rate</div>
-            <div className="metric-value">{enhancedStats.performance?.successRate || 0}%</div>
-            <div className="metric-chart">
-              <ResponsiveContainer width="100%" height={50}>
-                <BarChart data={[{rate: enhancedStats.performance?.successRate || 0}]}>
-                  <Bar dataKey="rate" fill="#9933FF" radius={[1, 1, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-          {/* Runtime metrics injected below */}
-          <div className="metric-item">
-            <div className="metric-label">CPU</div>
-            <div className="metric-value">{runtime.cpuPercent ?? 0}%</div>
-            <div className="metric-chart">
-              <ResponsiveContainer width="100%" height={50}>
-                <BarChart data={[{v: runtime.cpuPercent || 0}]}> 
-                  <Bar dataKey="v" fill="#22c55e" radius={[1,1,0,0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          <div className="metric-item">
-            <div className="metric-label">Memory RSS</div>
-            <div className="metric-value">{runtime.memoryRssMB ?? 0} MB</div>
-            <div className="metric-chart">
-              <ResponsiveContainer width="100%" height={50}>
-                <BarChart data={[{v: runtime.memoryRssMB || 0}]}> 
-                  <Bar dataKey="v" fill="#3b82f6" radius={[1,1,0,0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          <div className="metric-item">
-            <div className="metric-label">Uptime</div>
-            <div className="metric-value">{(() => { const s = runtime.uptimeSec || 0; const h = Math.floor(s/3600); const m = Math.floor((s%3600)/60); const sec = s%60; return `${h}h ${m}m ${sec}s`; })()}</div>
-            <div className="metric-chart">
-              <ResponsiveContainer width="100%" height={50}>
-                <LineChart data={[{t: 0, u: 0}, {t: 1, u: (runtime.uptimeSec || 0)/60}]}> 
-                  <Line type="monotone" dataKey="u" stroke="#a3a3a3" strokeWidth={1.5} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          <div className="metric-item">
-            <div className="metric-label">Requests Total</div>
-            <div className="metric-value">{runtime.requestsTotal ?? 0}</div>
-            <div className="metric-chart">
-              <ResponsiveContainer width="100%" height={50}>
-                <BarChart data={[{v: runtime.requestsTotal || 0}]}> 
-                  <Bar dataKey="v" fill="#9933FF" radius={[1,1,0,0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </div>
-      </div>
+      
     </div>
   );
 };

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import "./AdminDashboard.css";
 import { useToast } from "../ToastContext";
 import AdminStats from "./AdminStats";
+import RealTimeMetrics from "./RealTimeMetrics";
 import UserManagement from "./UserManagement";
 import ReportManagement from "./ReportManagement";
 import SystemLogs from "./SystemLogs";
@@ -67,12 +68,22 @@ const AdminDashboard = () => {
     }
 
     switch (activeTab) {
-      case "dashboard": return <AdminStats data={adminData.stats} onRefresh={fetchAdminData} />;
+      case "dashboard": return (
+        <>
+          <RealTimeMetrics stats={adminData.stats} onRefresh={fetchAdminData} />
+          <AdminStats data={adminData.stats} onRefresh={fetchAdminData} />
+        </>
+      );
       case "users": return <UserManagement users={adminData.users} onRefresh={fetchAdminData} />;
   case "reports": return <ReportManagement reports={adminData.reports} onRefresh={fetchAdminData} />;
       case "logs": return <SystemLogs logs={adminData.logs} onRefresh={fetchAdminData} />;
       case "settings": return <SystemSettings settings={adminData.settings} onRefresh={fetchAdminData} />;
-      default: return <AdminStats data={adminData.stats} onRefresh={fetchAdminData} />;
+      default: return (
+        <>
+          <RealTimeMetrics stats={adminData.stats} onRefresh={fetchAdminData} />
+          <AdminStats data={adminData.stats} onRefresh={fetchAdminData} />
+        </>
+      );
     }
   };
 
