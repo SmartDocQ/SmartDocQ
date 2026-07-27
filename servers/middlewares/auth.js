@@ -1,8 +1,10 @@
+const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const UserSession = require("../models/UserSession");
 const logger = require("../lib/logger");
 const { sendError } = require("./apiResponse");
+const { sessionAutoUpgradesCounter } = require("../lib/metrics");
 
 // Cookie configuration for httpOnly auth (identical to route config to clear properly)
 const isProduction = process.env.NODE_ENV === "production";
@@ -59,11 +61,34 @@ async function verifyToken(req, res, next) {
       return sendError(res, 401, "Session expired or logged out");
     }
 
-    // Auto-upgrade check: Invalidate old sessions created before CSRF hardening
+    // Auto-upgrade check: Dynamically upgrade/sync CSRF token bindings
+    const currentCsrfToken = req.cookies?.csrf_token;
+    let needsNewCsrf = false;
+
     if (!session.csrfHash) {
-      await UserSession.updateOne({ _id: session._id }, { $set: { isActive: false } });
-      clearAuthCookie(res);
-      return sendError(res, 401, "Session upgraded for security. Please log in again.");
+      needsNewCsrf = true;
+    } else if (!currentCsrfToken) {
+      needsNewCsrf = true;
+    } else {
+      const cookieHash = crypto.createHash("sha256").update(currentCsrfToken).digest("hex");
+      if (cookieHash !== session.csrfHash) {
+        needsNewCsrf = true;
+      }
+    }
+
+    if (needsNewCsrf) {
+      const newCsrfToken = crypto.randomBytes(32).toString("hex");
+      const newCsrfHash = crypto.createHash("sha256").update(newCsrfToken).digest("hex");
+
+      await UserSession.updateOne({ _id: session._id }, { $set: { csrfHash: newCsrfHash } });
+      session.csrfHash = newCsrfHash;
+
+      res.cookie("csrf_token", newCsrfToken, CSRF_COOKIE_OPTIONS);
+      req.csrfToken = newCsrfToken;
+      sessionAutoUpgradesCounter.inc();
+      logger.info({ sessionId: session._id }, "Session auto-upgraded/synchronized with new CSRF token");
+    } else {
+      req.csrfToken = currentCsrfToken;
     }
 
     req.userSession = session;

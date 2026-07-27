@@ -29,7 +29,7 @@ SmartDocQ is a full-stack AI document intelligence platform that combines struct
 - **Atomic Shadow Indexing**: Builds new vector generations in isolation, validates them across ChromaDB and BM25, performs compare-and-swap (CAS) activation, and automatically rolls back failed builds without interrupting retrieval.
 
 ### Security
-- **Session-Bound CSRF Protection**: Custom double-submit cookie protection with session-bound SHA-256 token validation, timing-safe comparisons, and Origin/Referer verification to prevent Cross-Site Request Forgery attacks.
+- **Session-Bound CSRF Protection**: Custom double-submit cookie protection with session-bound SHA-256 token validation, automatic CSRF synchronization for legacy or missing-cookie sessions, timing-safe comparisons, and Origin/Referer verification.
 - **Defense-in-Depth Request Validation**: Authenticated state-changing requests are protected by session-bound double-submit CSRF tokens, Origin/Referer validation, timing-safe comparisons, and per-user rate limiting.
 - **Internal AI Service Authentication**: All browser requests are routed through the Node.js backend. The Flask AI service accepts only authenticated server-to-server requests protected with a shared `SERVICE_TOKEN`, preventing direct client access to AI endpoints.
 - **Sensitive Data Detection**: Automatic identification of personal information (emails, phone numbers, Aadhaar, PAN, credit cards, SSN).
@@ -148,8 +148,8 @@ graph TD
 - **Flask 3.x**: Python web framework for AI processing
 - **Google Gemini 2.5 Flash**: Advanced text generation and comprehension
 - **models/gemini-embedding-2**: High-quality vector embeddings
-- **ChromaDB 0.5+**: Vector database for semantic retrieval
-- **BM25 Retrieval Layer**: Fast keyword and identifier-based search
+- **ChromaDB 0.5+**: Vector storage
+- **BM25 Lexical Index**: Exact-match retrieval
 - **Reciprocal Rank Fusion (RRF)**: Hybrid ranking engine combining vector and lexical retrieval
 - **PyMuPDF4LLM / PyMuPDF**: Structural Markdown extractors
 - **tiktoken**: Token packing estimation
@@ -280,7 +280,9 @@ npm install
 # MAX_UPLOAD_SIZE_MB=15
 # MAIL_USER=your_gmail_address (required in development only)
 # MAIL_PASS=your_gmail_app_password (required in development only)
-# RESEND_API_KEY=your_resend_api_key (required in production only)
+# BREVO_API_KEY=your_brevo_api_key (required in production only)
+# BREVO_SENDER_EMAIL=your_brevo_sender_email (required in production only)
+# BREVO_SENDER_NAME=your_brevo_sender_name (optional in production only)
 
 npm start
 ```
@@ -339,7 +341,7 @@ python -m pytest tests/ -v
 
 ---
 
-## Observability
+## Observability & Monitoring
 
 SmartDocQ includes built-in latency instrumentation for every retrieval request.
 
@@ -350,6 +352,12 @@ Captured metrics include:
 - RRF fusion latency
 - LLM latency
 - total request latency
+
+Additional backend metrics include:
+- HTTP request latency histograms
+- Node.js process metrics
+- Session auto-upgrade counter
+- CSRF refresh counter
 
 Internal timings are logged server-side while remaining hidden from client responses.
 

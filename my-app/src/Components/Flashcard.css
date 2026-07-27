@@ -80,7 +80,7 @@
   box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.04);
 }
 
-.generate-btn, .close-btn, .control-btn, .export-btn {
+.generate-btn, .close-btn, .control-btn {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
@@ -109,7 +109,7 @@
   box-shadow: 0 6px 16px rgba(255, 255, 255, 0.12);
 }
 
-.control-btn:hover, .export-btn:hover, .close-btn:hover {
+.control-btn:hover, .close-btn:hover {
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(255, 255, 255, 0.16);
   color: #ffffff;
@@ -231,12 +231,6 @@
   font-weight: 500;
 }
 
-.flashcard-export { 
-  display: flex; 
-  gap: 12px; 
-  justify-content: flex-end; 
-  margin-top: 8px;
-}
 
 @media (max-width: 640px) {
   .flashcard { height: 240px; }

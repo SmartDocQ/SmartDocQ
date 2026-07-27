@@ -250,7 +250,7 @@ const UserManagement = ({ users = [], onRefresh }) => {
                   <div className="user-info">
                     <div className="user-avatar">
                       {user.avatar ? (
-                        <img src={user.avatar} alt="" />
+                        <img src={user.avatar} alt="" referrerPolicy="no-referrer" />
                       ) : (
                         <span>{user.name?.charAt(0)?.toUpperCase()}</span>
                       )}

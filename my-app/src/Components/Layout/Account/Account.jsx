@@ -329,6 +329,7 @@ function Account({ user, onClose, onUpdated, onHistoryCleared }) {
                     width="85"
                     height="85"
                     className={`account-avatar${isDefaultAvatarIcon ? " account-avatar--icon" : ""}`}
+                    referrerPolicy="no-referrer"
                   />
                   {isEditing && (
                     <label className="avatar-edit-btn" htmlFor="avatar-upload" aria-label="Edit avatar">

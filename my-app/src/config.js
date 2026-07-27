@@ -2,7 +2,6 @@
 // Configure these in Vercel as environment variables:
 // - REACT_APP_API_URL (Node/Express backend base URL)
 
-
 export const API_BASE = (process.env.REACT_APP_API_URL || "http://localhost:5000").replace(/\/$/, "");
 
 const rawMb = Number(process.env.REACT_APP_MAX_UPLOAD_SIZE_MB);
@@ -10,7 +9,6 @@ export const MAX_UPLOAD_SIZE_MB = Number.isFinite(rawMb) && rawMb > 0 ? rawMb : 
 
 export const apiUrl = (path) =>
   `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`;
-
 
 // Helper to get CSRF token from document cookies
 const getCsrfToken = () => {
@@ -22,13 +20,47 @@ const getCsrfToken = () => {
 // Prevent multiple triggers on 401
 let isRedirecting = false;
 
+// Coalesce concurrent CSRF refresh requests to prevent duplicate backend calls
+let activeCsrfPromise = null;
+
 // Fetch wrapper for authenticated requests using httpOnly cookies
 export const apiFetch = async (
   path,
   { body, signal, headers: extraHeaders, ...rest } = {}
 ) => {
   const url = path.startsWith("http") ? path : apiUrl(path);
-  const csrfToken = getCsrfToken();
+  
+  let csrfToken = getCsrfToken();
+  const isMutating = ["POST", "PUT", "PATCH", "DELETE"].includes((rest.method || "GET").toUpperCase());
+  const isAuthRoute = url.includes("/api/auth/");
+
+  if (isMutating && !csrfToken && !isAuthRoute) {
+    if (!activeCsrfPromise) {
+      activeCsrfPromise = (async () => {
+        try {
+          const refreshRes = await fetch(apiUrl("/api/auth/csrf"), {
+            credentials: "include",
+          });
+          if (refreshRes.ok) {
+            const refreshData = await refreshRes.json().catch(() => ({}));
+            if (refreshData.success && refreshData.data && refreshData.data.csrfToken) {
+              return refreshData.data.csrfToken;
+            }
+          }
+        } catch (err) {
+          console.error("Failed to refresh CSRF token:", err);
+        } finally {
+          activeCsrfPromise = null;
+        }
+        return "";
+      })();
+    }
+
+    const refreshedToken = await activeCsrfPromise;
+    if (refreshedToken) {
+      csrfToken = refreshedToken;
+    }
+  }
 
   try {
     const res = await fetch(url, {
@@ -44,9 +76,6 @@ export const apiFetch = async (
         ...(extraHeaders || {}),
       },
     });
-
-    // Avoid redirect loop for auth endpoints (e.g., login failure)
-    const isAuthRoute = url.includes("/api/auth/");
 
     if (res.status === 401 && !isRedirecting && !isAuthRoute) {
       isRedirecting = true;

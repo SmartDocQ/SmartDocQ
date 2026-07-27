@@ -35,8 +35,10 @@ const getIpAddress = (req) => {
 /**
  * Creates a new database session and signs a corresponding JWT.
  * Returns { token, csrfToken }
+ * Conforms to secure session rotation: generates a fresh CSRF token and hash on every call.
  */
 async function createSession(user, req) {
+  // Rotate: Always generate a brand new random token on session/login creation
   const csrfToken = crypto.randomBytes(32).toString("hex");
   const csrfHash = crypto.createHash("sha256").update(csrfToken).digest("hex");
 

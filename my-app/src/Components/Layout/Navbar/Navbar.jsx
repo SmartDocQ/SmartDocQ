@@ -284,6 +284,7 @@ export default function Navbar() {
                       src={user.avatar || icon}
                       alt=""
                       className="avatar"
+                      referrerPolicy="no-referrer"
                     />
                   </button>
                   {showProfileMenu && (

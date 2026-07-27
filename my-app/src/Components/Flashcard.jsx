@@ -86,16 +86,6 @@ const Flashcard = ({ docId, onClose }) => {
     setMasteredCards(next);
   };
 
-  const exportToJSON = () => {
-    const dataStr = JSON.stringify(flashcards, null, 2);
-    const dataBlob = new Blob([dataStr], { type: "application/json" });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "flashcards.json";
-    link.click();
-  };
-
   if (isLoading) {
     return createPortal(
       <div className="flashcard-backdrop" onClick={onBackdropClick}>
@@ -188,10 +178,6 @@ const Flashcard = ({ docId, onClose }) => {
                 <button className="control-btn" onClick={handleNext}>Next →</button>
               )}
             </div>
-          </div>
-
-          <div className="flashcard-export">
-            <button className="export-btn" onClick={exportToJSON}>Export JSON</button>
           </div>
         </div>
       </div>

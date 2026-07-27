@@ -52,6 +52,7 @@ Key endpoints:
 - POST `/api/auth/logout` — Revokes the current session and clears cookies
 - POST `/api/auth/logout-all` — Revokes all active database sessions for the user (invalidation)
 - GET `/api/auth/verify` — Validates the session from cookies
+- GET `/api/auth/csrf` — Returns a synchronized CSRF token for authenticated sessions when the frontend needs to recover a missing token
 
 ### Session Security & Validation Flow
 Each login creates an active `UserSession` record in MongoDB.
@@ -109,7 +110,10 @@ flowchart TD
     Browser([Browser])
     --> Auth["JWT Cookie + CSRF Token"]
     --> Node["Node.js Gateway"]
-    --> Verify["JWT Validation + CSRF Validation"]
+    --> Verify["JWT Validation"]
+    --> Session["Session Validation"]
+    --> Sync["CSRF Synchronization"]
+    --> CsrfVal["CSRF Validation"]
     --> Ownership["Ownership Check"]
     --> Limit["Rate Limiting"]
     --> Token["SERVICE_TOKEN Auth"]
@@ -134,6 +138,8 @@ Security features include:
 - SHA-256 hash of each CSRF token stored in the active `UserSession`.
 - Timing-safe token comparison using `crypto.timingSafeEqual`.
 - Automatic `X-CSRF-Token` validation on authenticated mutating requests.
+- Automatic session-bound CSRF token synchronization when legacy sessions, missing cookies, or token mismatches are detected.
+- Dedicated authenticated `/api/auth/csrf` endpoint allows the frontend to recover a missing CSRF cookie without requiring the user to log in again.
 - Origin/Referer validation for defense in depth.
 - Trusted internal Flask service requests authenticated with `x-service-token` bypass CSRF validation.
 
@@ -186,6 +192,9 @@ Responses larger than 1 KB are automatically compressed using `gzip` to reduce b
   - HTTP request latency histogram (Prometheus)
   - Default Node.js process metrics
   - Request duration grouped by route, method, and status code
+  - Additional custom metrics:
+    - `session_auto_upgrades_total` — Counts automatic CSRF session synchronization/upgrades.
+    - `csrf_refreshes_total` — Counts authenticated CSRF refresh endpoint requests.
 
 ## Graceful Shutdown
 The server supports graceful shutdown. Upon receiving a `SIGINT` or `SIGTERM` signal, it:

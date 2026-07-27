@@ -18,6 +18,7 @@ const logger = require("../lib/logger");
 const { verifyToken, clearAuthCookie } = require("../middlewares/auth");
 const { extractCloudinaryPublicId } = require("../utils/cloudinary");
 const { verifyCsrf } = require("../middlewares/csrf");
+const { csrfRefreshesCounter } = require("../lib/metrics");
 const { validate } = require("../middlewares/validate");
 const { sendError, sendSuccess } = require("../middlewares/apiResponse");
 const { signupSchema, loginSchema, updateMeSchema, forgotPasswordSchema, resetPasswordSchema, googleSchema } = require("../validators/authSchemas");
@@ -30,6 +31,15 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many authentication requests, please try again after 15 minutes." },
+});
+
+// Dedicated rate limiter for CSRF refresh endpoint
+const csrfLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per 15 minutes (generous but prevents brute-force / DDoS)
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many CSRF refresh requests, please try again later." },
 });
 
 // Cookie configuration for httpOnly auth
@@ -128,6 +138,7 @@ router.post("/login", authLimiter, validate(loginSchema), async (req, res) => {
         createdAt: user.createdAt,
         lastLogin: user.lastLogin
       },
+      csrfToken,
       isAdmin: user.isAdmin || false,
     });
   } catch (err) {
@@ -277,7 +288,17 @@ router.post("/logout-all", verifyToken, verifyCsrf, async (req, res) => {
 
 // Verify session - checks if cookie is valid
 router.get("/verify", verifyToken, (req, res) => {
-  return sendSuccess(res, 200, { valid: true, userId: req.userId });
+  return sendSuccess(res, 200, { 
+    valid: true, 
+    userId: req.userId,
+    csrfToken: req.csrfToken
+  });
+});
+
+// GET /api/auth/csrf - returns a fresh CSRF token (automatically synchronized via verifyToken middleware)
+router.get("/csrf", verifyToken, csrfLimiter, (req, res) => {
+  csrfRefreshesCounter.inc();
+  return sendSuccess(res, 200, { csrfToken: req.csrfToken });
 });
 
 
@@ -499,6 +520,7 @@ router.post('/google', authLimiter, validate(googleSchema), async (req, res) => 
         createdAt: user.createdAt,
         lastLogin: user.lastLogin,
       },
+      csrfToken,
       isAdmin: user.isAdmin || false,
     });
   } catch (err) {
