@@ -124,7 +124,12 @@ flowchart TD
 ## Security Controls
 
 ### Authentication Rate Limiting
-- Core authentication routes (`login`, `signup`, `forgot-password`, `reset-password`, `google`) are protected by an `express-rate-limit` guard restricting IPs to 30 authentication-related requests per 15 minutes.
+Authentication endpoints use dedicated rate limits based on their risk profile to mitigate brute-force attacks:
+- **Login**: 10 requests / 15 minutes / IP (`skipSuccessfulRequests` enabled)
+- **Signup**: 5 requests / hour / IP
+- **Forgot Password**: 5 requests / 15 minutes / IP
+- **Reset Password**: 5 requests / 15 minutes / IP
+- **Google Sign-In**: 10 requests / 15 minutes / IP (shares the login limiter)
 - **Enumeration Protection**: Login failures return generic `"Invalid email or password"` responses to prevent scanning/enumeration of active emails.
 - **Google OAuth Compatibility**: Safe checks prevent server crashes during credential comparison or profile updates for accounts created via Google Sign-In.
 
@@ -157,6 +162,13 @@ The following limits are enforced before requests reach the AI service:
 - Quiz generation: 5 requests/minute
 - Flashcard generation: 5 requests/minute
 
+### Upload Protection & Deduplication
+Document uploads are protected by multiple layers:
+- **Rate Limiting**: Authenticated upload rate limiting restricts users to 100 uploads per hour per User ID.
+- **File Size Limit**: Enforces a maximum upload size of 15 MB per file.
+- **File Type Validation**: Only supported MIME types (`.pdf`, `.doc`, `.docx`, `.txt`, `.csv`, `.xlsx`) are allowed.
+- **SHA-256 Deduplication**: Uploaded documents are fingerprinted using SHA-256 hashes. If an identical document has already been indexed for the same user, SmartDocQ reuses the existing representation instead of performing duplicate indexing and processing.
+
 ## Validation & Responses
 - Auth and admin routes use centralized Zod schemas via a `validate` middleware to enforce strict shapes for `body`, `query`, and `params`.
 - Successful API responses include `success: true` along with any payload fields.
@@ -170,10 +182,11 @@ The following limits are enforced before requests reach the AI service:
 The API uses Pino for structured logging.
 - **Production**: Structured JSON logs. Sensitive fields (`password`, `token`, `refreshToken`, `accessToken`, `csrfToken`, `secret`, `clientSecret`, `apiKey`) and cookie/authorization headers are redacted.
 - **Development**: Pretty-colored, human-readable terminal output.
+- **Security Events**: Security-relevant events such as authentication failures, rate-limit violations, and unexpected server errors are logged using structured logging.
 - **Automatic Requests**: Logs method, url, status code, and execution time (e.g., `POST /api/auth/login 200 320ms`). Ignores preflight `OPTIONS` requests.
 
 ## HTTP Security
-The API applies Helmet to enable standard HTTP security headers:
+The API applies Helmet, which configures common HTTP response headers including protections against MIME sniffing, clickjacking, and insecure referrer handling:
 - X-Content-Type-Options
 - X-Frame-Options
 - Referrer-Policy

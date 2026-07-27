@@ -30,7 +30,7 @@ SmartDocQ is a full-stack AI document intelligence platform that combines struct
 
 ### Security
 - **Session-Bound CSRF Protection**: Custom double-submit cookie protection with session-bound SHA-256 token validation, automatic CSRF synchronization for legacy or missing-cookie sessions, timing-safe comparisons, and Origin/Referer verification.
-- **Defense-in-Depth Request Validation**: Authenticated state-changing requests are protected by session-bound double-submit CSRF tokens, Origin/Referer validation, timing-safe comparisons, and per-user rate limiting.
+- **Defense-in-Depth Request Validation**: Authenticated state-changing requests are protected by session-bound double-submit CSRF tokens, anti-caching response headers (Cache-Control/Surrogate-Control), Origin/Referer validation, timing-safe comparisons, and per-user/per-IP rate limiting.
 - **Internal AI Service Authentication**: All browser requests are routed through the Node.js backend. The Flask AI service accepts only authenticated server-to-server requests protected with a shared `SERVICE_TOKEN`, preventing direct client access to AI endpoints.
 - **Sensitive Data Detection**: Automatic identification of personal information (emails, phone numbers, Aadhaar, PAN, credit cards, SSN).
 - **User Consent Workflow**: Privacy-first approach requiring explicit consent before processing sensitive documents.
@@ -42,15 +42,16 @@ SmartDocQ is a full-stack AI document intelligence platform that combines struct
 - **Server-Side Session Management**: Server-side session management with session invalidation and "logout from all devices" support.
 - **Centralized Server-Side Validation**: Auth and admin APIs validate all inputs with Zod schemas before any business logic or database access.
 - **Strict Admin Authorization**: Admin endpoints are protected by middleware that requires an authenticated user with `isAdmin = true`; there are no hardcoded admin credentials or token backdoors.
-- **Authentication Rate Limiting**: Sensitive auth endpoints (login, signup, password resets) are rate-limited per IP to prevent brute-force attacks.
+- **Authentication Rate Limiting**: Sensitive auth endpoints (login, signup, password resets) are protected by dedicated, route-specific rate limits (e.g., login limiting failed attempts to 10 per 15 minutes, registration limited to 5 per hour).
 - **User Enumeration Protection**: Authentication endpoints utilize unified, generic error responses to avoid leaking database user existence.
+- **Document Deduplication & Upload Protection**: Uploaded files are restricted to a maximum size of 15 MB and validated by MIME type before being fingerprinted using SHA-256 hashes to reuse existing indices and prevent redundant processing.
 - **Optimistic Locking & Recovery**: Processing jobs use optimistic versioning and watchdog recovery to prevent race conditions and automatically recover stalled indexing tasks.
 
 ### Administration
 - **User Management**: Comprehensive admin dashboard for user oversight and role assignment.
 - **Document Analytics**: Track document uploads, processing status, and usage statistics.
 - **Report Management**: Handle user feedback and support inquiries efficiently.
-- **System Monitoring**: Structured request logging (Pino), Prometheus metrics, health checks, and background maintenance jobs.
+- **System Monitoring**: Structured logging of HTTP requests and security events (Pino), Prometheus metrics counters, health checks, and background watchdog maintenance jobs.
 
 ---
 

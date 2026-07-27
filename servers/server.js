@@ -13,6 +13,7 @@ const dns = require("dns");
 dns.setDefaultResultOrder("ipv4first");
 const helmet = require("helmet");
 const compression = require("compression");
+const rateLimit = require("express-rate-limit");
 
 // ---- Required server-to-server secret ----
 // Used to authorize internal requests from the Flask service.
@@ -145,6 +146,17 @@ logger.info({ env: process.env.NODE_ENV || "", port: process.env.PORT || 5000 },
 mongoose.connection.on("connected", () => logger.info("MongoDB connected"));
 mongoose.connection.on("disconnected", () => logger.warn("MongoDB disconnected"));
 mongoose.connection.on("error", (err) => logger.error({ err }, "MongoDB connection error"));
+
+// Global IP-based rate limiter to protect the server from volume DoS attacks
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 450, // Limit each IP to 450 requests per 15 minutes (generous for standard client-side page assets loading)
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many requests from this IP, please try again later." }
+});
+
+app.use("/api", globalLimiter);
 
 app.use("/api/auth", authRoutes);
 app.use("/api/document", documentRoutes);

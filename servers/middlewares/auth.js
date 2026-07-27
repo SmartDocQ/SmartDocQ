@@ -35,6 +35,12 @@ const clearAuthCookie = (res) => {
  * verifies session and attaches user to the request context.
  */
 async function verifyToken(req, res, next) {
+  // Prevent caching of sensitive authenticated endpoints (especially /verify and /csrf)
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.set("Surrogate-Control", "no-store");
+  res.set("Pragma", "no-cache");
+  res.set("Expires", "0");
+
   try {
     const token =
       req.cookies?.auth_token ||

@@ -38,6 +38,15 @@ const summarizeLimiter = rateLimit({
   keyGenerator: (req) => req.userId
 });
 
+const uploadLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 50, // Limit each user to 50 uploads per hour (generous for batch uploads of small files, but protects from automated spam)
+  message: { message: "Too many document uploads. Please try again after an hour." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.userId
+});
+
 
 // Generate content hash for deduplication
 function hashBuffer(buffer) {
@@ -123,7 +132,7 @@ const upload = multer({
   }
 });
 
-router.post("/upload", verifyToken, ensureActive, verifyCsrf, upload.single("file"), async (req, res) => {
+router.post("/upload", verifyToken, ensureActive, verifyCsrf, uploadLimiter, upload.single("file"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 

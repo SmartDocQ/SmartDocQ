@@ -24,13 +24,30 @@ const { sendError, sendSuccess } = require("../middlewares/apiResponse");
 const { signupSchema, loginSchema, updateMeSchema, forgotPasswordSchema, resetPasswordSchema, googleSchema } = require("../validators/authSchemas");
 const rateLimit = require("express-rate-limit");
 
-// Rate limiter for sensitive authentication endpoints to prevent brute-force attacks and spamming
-const authLimiter = rateLimit({
+// Rate limiters for sensitive authentication endpoints
+const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 30, // Limit each IP to 30 requests per windowMs
+  max: 10, // Max 10 attempts per 15 minutes per IP
   standardHeaders: true,
   legacyHeaders: false,
-  message: { message: "Too many authentication requests, please try again after 15 minutes." },
+  skipSuccessfulRequests: true, // Only failed logins count towards quota
+  message: { message: "Too many login attempts, please try again after 15 minutes." }
+});
+
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5, // Max 5 account registrations per hour per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many registrations from this IP, please try again after an hour." }
+});
+
+const passwordResetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Max 5 requests per 15 minutes per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many password reset requests, please try again after 15 minutes." }
 });
 
 // Dedicated rate limiter for CSRF refresh endpoint
@@ -70,7 +87,7 @@ const setAuthCookie = (res, token, csrfToken) => {
 
 
 // Signup
-router.post("/signup", authLimiter, validate(signupSchema), async (req, res) => {
+router.post("/signup", registerLimiter, validate(signupSchema), async (req, res) => {
   const { name, email, password, googleId } = req.validated.body;
   try {
     const existingUser = await User.findOne({ email });
@@ -98,7 +115,7 @@ router.post("/signup", authLimiter, validate(signupSchema), async (req, res) => 
 });
 
 // Login
-router.post("/login", authLimiter, validate(loginSchema), async (req, res) => {
+router.post("/login", loginLimiter, validate(loginSchema), async (req, res) => {
   const { email, password } = req.validated.body;
   try {
     const user = await User.findOne({ email });
@@ -148,7 +165,7 @@ router.post("/login", authLimiter, validate(loginSchema), async (req, res) => {
 });
 
 // Forgot password - request reset link
-router.post("/forgot-password", authLimiter, validate(forgotPasswordSchema), async (req, res) => {
+router.post("/forgot-password", passwordResetLimiter, validate(forgotPasswordSchema), async (req, res) => {
   try {
     logger.info("Starting forgot-password");
     const { email: normalizedEmail } = req.validated.body;
@@ -197,7 +214,7 @@ router.post("/forgot-password", authLimiter, validate(forgotPasswordSchema), asy
 });
 
 // Reset password - consume token and set new password
-router.post("/reset-password", authLimiter, validate(resetPasswordSchema), async (req, res) => {
+router.post("/reset-password", passwordResetLimiter, validate(resetPasswordSchema), async (req, res) => {
   try {
     const { token, password } = req.validated.body;
 
@@ -493,7 +510,7 @@ router.post("/me/avatar", verifyToken, verifyCsrf, avatarUpload.single("avatar")
 });
 // ===== GOOGLE OAUTH =====
 // Google Sign-In (verify token from frontend)
-router.post('/google', authLimiter, validate(googleSchema), async (req, res) => {
+router.post('/google', loginLimiter, validate(googleSchema), async (req, res) => {
   try {
     const { credential } = req.validated.body; // Google JWT token from @react-oauth/google
     
