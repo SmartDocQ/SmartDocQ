@@ -26,6 +26,17 @@ require.cache[require.resolve('../middlewares/csrf')] = {
     verifyCsrf: (req, res, next) => next()
   }
 };
+const originalNodeFetch = require("node-fetch");
+let mockNodeFetchHandler = null;
+
+require.cache[require.resolve('node-fetch')] = {
+  exports: function (url, options) {
+    if (mockNodeFetchHandler) {
+      return mockNodeFetchHandler(url, options);
+    }
+    return originalNodeFetch(url, options);
+  }
+};
 
 const Document = require('../models/Document');
 const DocChunk = require('../models/DocChunk');
@@ -230,11 +241,12 @@ test('POST /:id/index-state/building route tests', async (t) => {
     let docDeleted = false;
     let chatDeleted = false;
     let chunksDeleted = false;
+    let tablesDeleted = false;
 
     Document.findOneAndDelete = async (query) => {
       assert.deepStrictEqual(query, { _id: 'doc123', user: 'user123' });
       docDeleted = true;
-      return { _id: 'doc123', user: 'user123' };
+      return { _id: 'doc123', user: 'user123', doc_id: 'doc_uuid_123' };
     };
 
     const Chat = require('../models/Chat');
@@ -253,6 +265,14 @@ test('POST /:id/index-state/building route tests', async (t) => {
       return { deletedCount: 5 };
     };
 
+    const DocumentTable = require('../models/DocumentTable');
+    const originalDocumentTableDeleteMany = DocumentTable.deleteMany;
+    DocumentTable.deleteMany = async (query) => {
+      assert.deepStrictEqual(query, { doc_id: 'doc_uuid_123' });
+      tablesDeleted = true;
+      return { deletedCount: 1 };
+    };
+
     const server = app.listen(0);
     const { port } = server.address();
     try {
@@ -265,9 +285,147 @@ test('POST /:id/index-state/building route tests', async (t) => {
       assert.ok(docDeleted);
       assert.ok(chatDeleted);
       assert.ok(chunksDeleted);
+      assert.ok(tablesDeleted);
     } finally {
       Chat.findOneAndDelete = originalChatFindOneAndDelete;
       DocChunk.deleteMany = originalDocChunkDeleteMany;
+      DocumentTable.deleteMany = originalDocumentTableDeleteMany;
+      server.close();
+    }
+  });
+
+  await t.test('PATCH /:id/table optimistic lock conflict', async () => {
+    const DocumentTable = require('../models/DocumentTable');
+    
+    const originalDocFindOne = Document.findOne;
+    const originalTableFindOne = DocumentTable.findOne;
+    
+    Document.findOne = async () => ({
+      _id: 'doc123',
+      user: 'user123',
+      doc_id: 'doc_uuid_123',
+      contentHash: 'old_hash',
+      data: Buffer.from('old_bytes'),
+      indexState: { activeVersion: 'v1' }
+    });
+
+    DocumentTable.findOne = async () => ({
+      _id: 'table123',
+      doc_id: 'doc_uuid_123',
+      headers: ['A', 'B'],
+      rows: [['1', '2']],
+      __v: 2
+    });
+
+    const server = app.listen(0);
+    const { port } = server.address();
+
+    try {
+      const response = await fetch(`http://localhost:${port}/api/document/doc123/table`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sheet: 'Sheet1',
+          __v: 1, // Mismatched version
+          mutations: [{ type: 'update', row: 0, column: 1, value: '3' }]
+        })
+      });
+
+      assert.strictEqual(response.status, 409);
+      const data = await response.json();
+      assert.ok(data.message.includes('Conflict'));
+    } finally {
+      Document.findOne = originalDocFindOne;
+      DocumentTable.findOne = originalTableFindOne;
+      server.close();
+    }
+  });
+
+  await t.test('PATCH /:id/table successful update', async () => {
+    const DocumentTable = require('../models/DocumentTable');
+    const EditHistory = require('../models/EditHistory');
+    const DocChunk = require('../models/DocChunk');
+
+    const originalDocFindOne = Document.findOne;
+    const originalTableFindOne = DocumentTable.findOne;
+    const originalEditInsert = EditHistory.insertMany;
+    const originalChunkBulk = DocChunk.bulkWrite;
+    const originalGlobalFetch = global.fetch;
+
+    let tableSaved = false;
+    let docSaved = false;
+    let historySaved = false;
+    let chunksUpdated = false;
+
+    const mockDoc = {
+      _id: 'doc123',
+      user: 'user123',
+      doc_id: 'doc_uuid_123',
+      contentHash: 'old_hash',
+      data: Buffer.from('old_bytes'),
+      indexState: { activeVersion: 'v1' },
+      save: async () => { docSaved = true; }
+    };
+
+    Document.findOne = async () => mockDoc;
+
+    const mockTable = {
+      _id: 'table123',
+      doc_id: 'doc_uuid_123',
+      headers: ['A', 'B'],
+      rows: [['1', '2']],
+      __v: 1,
+      markModified: () => {},
+      save: async () => { tableSaved = true; }
+    };
+
+    DocumentTable.findOne = async () => mockTable;
+    EditHistory.insertMany = async () => { historySaved = true; };
+    DocChunk.bulkWrite = async () => { chunksUpdated = true; };
+
+    // Set the node-fetch mock handler
+    mockNodeFetchHandler = async (url, options) => {
+      if (url.includes('/api/internal/document/sync-table')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            success: true,
+            file_bytes: Buffer.from('new_bytes').toString('base64'),
+            updated_chunks: [{ chunk_id: 'doc_uuid_123:v1:0', chunk_index: 0, text: 'new text' }]
+          })
+        };
+      }
+      return originalNodeFetch(url, options);
+    };
+
+    const server = app.listen(0);
+    const { port } = server.address();
+
+    try {
+      const response = await fetch(`http://localhost:${port}/api/document/doc123/table`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sheet: 'Sheet1',
+          __v: 1,
+          mutations: [{ type: 'update', row: 0, column: 1, value: '3' }]
+        })
+      });
+
+      assert.strictEqual(response.status, 200);
+      const data = await response.json();
+      assert.strictEqual(data.success, true);
+      assert.ok(tableSaved);
+      assert.ok(docSaved);
+      assert.ok(historySaved);
+      assert.ok(chunksUpdated);
+    } finally {
+      Document.findOne = originalDocFindOne;
+      DocumentTable.findOne = originalTableFindOne;
+      EditHistory.insertMany = originalEditInsert;
+      DocChunk.bulkWrite = originalChunkBulk;
+      mockNodeFetchHandler = null;
       server.close();
     }
   });

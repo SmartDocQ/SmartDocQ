@@ -3,6 +3,7 @@ const router = express.Router();
 const mongoose = require("mongoose");
 const Document = require("../models/Document");
 const DocChunk = require("../models/DocChunk");
+const DocumentTable = require("../models/DocumentTable");
 const { verifyToken, ensureActive } = require("../middlewares/auth");
 
 // Internal upsert endpoint for Flask to persist chunk texts for keyword/metadata search
@@ -14,9 +15,44 @@ router.post("/internal/chunks/upsert", async (req, res) => {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const { documentId, doc_id, filename, indexVersion, chunks } = req.body || {};
-    if ((!documentId && !doc_id) || !Array.isArray(chunks)) {
-      return res.status(400).json({ message: "Missing documentId/doc_id or chunks" });
+    const { documentId, doc_id, filename, indexVersion, chunks, tables } = req.body || {};
+    if ((!documentId && !doc_id) || !Array.isArray(chunks) || !indexVersion || typeof indexVersion !== "string" || !indexVersion.trim()) {
+      return res.status(400).json({ message: "Missing or invalid documentId/doc_id, indexVersion, or chunks" });
+    }
+
+    // Validate and deduplicate tables payload
+    const validatedTables = [];
+    const seenTableIds = new Set();
+    if (Array.isArray(tables)) {
+      if (tables.length > 50) {
+        return res.status(400).json({ message: "Payload contains too many tables (maximum 50 allowed)" });
+      }
+      for (const t of tables) {
+        if (!t || typeof t.table_id !== "string" || !t.table_id.trim()) {
+          return res.status(400).json({ message: "Malformed table item: missing or invalid table_id" });
+        }
+        if (!Array.isArray(t.headers) || !Array.isArray(t.rows)) {
+          return res.status(400).json({ message: `Malformed table: ${t.table_id} headers and rows must be arrays` });
+        }
+        if (t.headers.length > 300 || t.rows.length > 2000) {
+          return res.status(400).json({ message: `Table ${t.table_id} exceeds size boundaries (max 300 columns, 2000 rows)` });
+        }
+        // Validate that row widths do not exceed header counts
+        for (const row of t.rows) {
+          if (!Array.isArray(row)) {
+            return res.status(400).json({ message: `Malformed table: ${t.table_id} row is not an array` });
+          }
+          if (row.length > t.headers.length) {
+            return res.status(400).json({ message: `Malformed table: ${t.table_id} row width exceeds header count` });
+          }
+        }
+        // Deduplicate within the single payload
+        if (seenTableIds.has(t.table_id)) {
+          continue;
+        }
+        seenTableIds.add(t.table_id);
+        validatedTables.push(t);
+      }
     }
 
     let doc = null;
@@ -28,8 +64,10 @@ router.post("/internal/chunks/upsert", async (req, res) => {
     }
     if (!doc) return res.status(404).json({ message: "Document not found" });
 
-    // Replace strategy: remove existing chunks for this specific version then insert new ones
+    const stableDocId = doc.doc_id || doc_id;
     const versionVal = indexVersion || null;
+
+    // Replace strategy for chunks: remove existing chunks for this specific version then insert new ones
     await DocChunk.deleteMany({ doc: doc._id, indexVersion: versionVal });
 
     const bulk = DocChunk.collection.initializeUnorderedBulkOp();
@@ -55,7 +93,40 @@ router.post("/internal/chunks/upsert", async (req, res) => {
       result = { nUpserted: r?.nUpserted || 0, nModified: r?.nModified || 0 };
     }
 
-    return res.json({ message: "Chunks upserted", result });
+    // Table Storage synchronization: remove previous tables matching doc_id and indexVersion
+    await DocumentTable.deleteMany({ doc_id: stableDocId, indexVersion: versionVal });
+
+    // Idempotent bulk replacement for new tables
+    if (validatedTables.length > 0) {
+      const tableOps = validatedTables.map((t) => {
+        const rowCount = Array.isArray(t.rows) ? t.rows.length : 0;
+        const columnCount = Array.isArray(t.headers) ? t.headers.length : 0;
+
+        return {
+          replaceOne: {
+            filter: {
+              doc_id: stableDocId,
+              indexVersion: versionVal,
+              tableId: t.table_id
+            },
+            replacement: {
+              doc_id: stableDocId,
+              indexVersion: versionVal,
+              tableId: t.table_id,
+              sheet: t.sheet || null,
+              headers: Array.isArray(t.headers) ? t.headers : [],
+              rows: Array.isArray(t.rows) ? t.rows : [],
+              rowCount,
+              columnCount
+            },
+            upsert: true
+          }
+        };
+      });
+      await DocumentTable.bulkWrite(tableOps);
+    }
+
+    return res.json({ message: "Chunks and tables upserted", result });
   } catch (err) {
     return res.status(500).json({ message: err?.message || String(err) });
   }

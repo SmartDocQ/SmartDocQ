@@ -103,6 +103,8 @@ flowchart TD
 
 The browser never communicates directly with the Flask AI service. Node authenticates users, validates document ownership, enforces request limits, and securely proxies requests to Flask using a shared `SERVICE_TOKEN`. The gateway also coordinates document index lifecycle state, including background indexing, version activation, and recovery from interrupted indexing operations.
 
+The gateway also coordinates incremental spreadsheet editing. Cell updates are validated using optimistic concurrency (`__v`), forwarded to the AI service for incremental index synchronization, and only committed to MongoDB after successful AI processing. This keeps spreadsheet edits, semantic vectors, and keyword indexes synchronized while avoiding full document re-indexing.
+
 ## Request Flow
 
 ```mermaid
@@ -162,12 +164,15 @@ The following limits are enforced before requests reach the AI service:
 - Quiz generation: 5 requests/minute
 - Flashcard generation: 5 requests/minute
 
-### Upload Protection & Deduplication
-Document uploads are protected by multiple layers:
-- **Rate Limiting**: Authenticated upload rate limiting restricts users to 100 uploads per hour per User ID.
+### Document Protection & Editing
+Document uploads and table cell edits are protected by multiple layers:
+- **Rate Limiting**: Authenticated upload rate limiting restricts users to 50 uploads per hour per User ID.
 - **File Size Limit**: Enforces a maximum upload size of 15 MB per file.
 - **File Type Validation**: Only supported MIME types (`.pdf`, `.doc`, `.docx`, `.txt`, `.csv`, `.xlsx`) are allowed.
 - **SHA-256 Deduplication**: Uploaded documents are fingerprinted using SHA-256 hashes. If an identical document has already been indexed for the same user, SmartDocQ reuses the existing representation instead of performing duplicate indexing and processing.
+- **Optimistic Concurrency Control**: Spreadsheet edits require the current `__v` version key. Conflicting edits are rejected with HTTP `409` to prevent lost updates.
+- **Incremental Spreadsheet Synchronization**: Cell edits update only affected table chunks while paragraph chunks are updated in place or regenerated when chunk boundaries change. Full document re-indexing is avoided.
+- **Best-Effort Consistency**: AI indexes are synchronized before MongoDB persistence. If persistence fails, retry logic is applied to audit history and chunk metadata updates before returning an error.
 
 ## Validation & Responses
 - Auth and admin routes use centralized Zod schemas via a `validate` middleware to enforce strict shapes for `body`, `query`, and `params`.

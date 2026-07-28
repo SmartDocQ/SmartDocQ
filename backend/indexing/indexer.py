@@ -53,7 +53,7 @@ def has_index(doc_id: str) -> bool:
         return True
     return has_legacy_chunks(doc_id)
 
-def _push_chunks_to_node(doc_id: str, filename: str, chunk_records: list, index_version: str):
+def _push_chunks_to_node(doc_id: str, filename: str, chunk_records: list, index_version: str, tables: list | None = None):
     if not chunk_records:
         return
     payload = {
@@ -61,6 +61,7 @@ def _push_chunks_to_node(doc_id: str, filename: str, chunk_records: list, index_
         "filename": filename,
         "indexVersion": index_version,
         "chunks": chunk_records,
+        "tables": tables if tables is not None else [],
     }
     headers = {"Content-Type": "application/json", "x-service-token": SERVICE_TOKEN}
     try:
@@ -85,8 +86,8 @@ def _sync_bm25(doc_id: str, chunk_records: list, index_version: str, file_hash: 
     build_bm25_index(doc_id, bm25_chunks, index_version, file_hash=file_hash)
 
 
-def _finalize_index(doc_id: str, filename: str, chunk_records: list, index_version: str, file_hash: str | None = None):
-    _push_chunks_to_node(doc_id, filename, chunk_records, index_version)
+def _finalize_index(doc_id: str, filename: str, chunk_records: list, index_version: str, tables: list | None = None, file_hash: str | None = None):
+    _push_chunks_to_node(doc_id, filename, chunk_records, index_version, tables)
     _sync_bm25(doc_id, chunk_records, index_version, file_hash=file_hash)
 
 def _extract_tables_for_document(doc_id: str, filename: str, mimetype: str, data: bytes):
@@ -246,7 +247,7 @@ def index_bytes(
         if not ok:
             raise IndexBuildError("Indexing returned not ok")
 
-        _finalize_index(doc_id, filename, chunk_records, index_version, file_hash=file_hash)
+        _finalize_index(doc_id, filename, chunk_records, index_version, tables, file_hash=file_hash)
 
         if not validate_index_version(doc_id, index_version, expected_chunks=added, file_hash=file_hash):
             raise IndexBuildError("Index validation failed")
@@ -298,7 +299,7 @@ def index_text(doc_id: str, filename: str, text: str, file_hash: str | None = No
             file_hash=file_hash,
         )
 
-        _finalize_index(doc_id, filename, chunk_records, index_version, file_hash=file_hash)
+        _finalize_index(doc_id, filename, chunk_records, index_version, [], file_hash=file_hash)
 
         if not validate_index_version(doc_id, index_version, expected_chunks=added, file_hash=file_hash):
             raise IndexBuildError("Index validation failed")

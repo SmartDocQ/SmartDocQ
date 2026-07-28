@@ -12,6 +12,7 @@ SmartDocQ is a full-stack AI document intelligence platform that combines struct
 
 ### Core AI Features
 - **AI-Powered Chat**: Hybrid RAG-based question answering using Vector Search + BM25 + RRF Fusion.
+- **Interactive Spreadsheet Editing**: Edit CSV and Excel (XLSX) documents directly in the browser. SmartDocQ incrementally synchronizes only affected table and paragraph chunks, keeping AI responses consistent without rebuilding the entire document index.
 - **Quiz Generation**: Automatic creation of multiple-choice, true/false, and short-answer questions from document content.
 - **Flashcard Creation**: Smart extraction of key concepts and definitions for effective learning and revision.
 - **Text Summarization**: Concise summaries of document content for quick comprehension.
@@ -25,7 +26,7 @@ SmartDocQ is a full-stack AI document intelligence platform that combines struct
   - **Contextual document embeddings**: Prepend document title, hierarchical headings, and page ranges before embedding, improving retrieval quality while preserving the original chunk text for generation.
   - **Rich metadata indexing** and duplicate filtering.
 - **Hybrid Retrieval Engine**: Combines semantic vector search, version-isolated BM25 lexical search with in-memory caching, and Reciprocal Rank Fusion (RRF) for higher retrieval accuracy.
-- **Spreadsheet & Table Intelligence**: Extracts and indexes structured data from CSV, XLSX, and DOCX tables for table-aware question answering.
+- **Spreadsheet & Table Intelligence**: Extracts, indexes, and incrementally synchronizes structured data from CSV, XLSX, and DOCX tables. Spreadsheet edits automatically update semantic vectors and lexical indexes, enabling AI answers to reflect changes without full document re-indexing.
 - **Atomic Shadow Indexing**: Builds new vector generations in isolation, validates them across ChromaDB and BM25, performs compare-and-swap (CAS) activation, and automatically rolls back failed builds without interrupting retrieval.
 
 ### Security
@@ -83,6 +84,7 @@ graph TD
     subgraph AI_Layer ["AI Processing Layer (Flask Service)"]
         FlaskApp["Flask API Router<br/>(/api/index-from-atlas, /api/document/ask)"]:::aiservice
         Parser["Document Parser & Table Extractor<br/>(PyMuPDF4LLM → Markdown → Block Parser → Chunker)"]:::aiservice
+        IndexSynchronizer["Index Synchronizer<br/>(Incremental Cell Edit Sync)"]:::aiservice
         ShadowVersionManager["Shadow Version Manager<br/>(CAS Activation & Rollbacks)"]:::aiservice
         RetrievalPipeline["Hybrid Retrieval Engine<br/>(Vector Search + BM25 + RRF)"]:::aiservice
         Sanitizer["Prompt Injection Sanitizer<br/>(sanitize_context)"]:::aiservice
@@ -112,6 +114,8 @@ graph TD
     
     FlaskApp --> Parser
     Parser --> ShadowVersionManager
+    FlaskApp --> IndexSynchronizer
+    IndexSynchronizer --> ShadowVersionManager
     ShadowVersionManager --> RetrievalPipeline
     RetrievalPipeline --> Sanitizer
     
@@ -224,6 +228,7 @@ If validation fails:
 - `chunking_version` — data schema version tracking
 - `indexed_at` — timestamp of indexing
 - `file_hash` — source file content hash to detect changes
+- Incremental spreadsheet edits synchronize affected table and paragraph chunks while preserving the active index
 - `section` / `subsection` — dynamic layout coordinates
 - `start_page` / `end_page` — page range boundaries
 
@@ -238,6 +243,7 @@ SmartDocQ uses a Hybrid RAG pipeline that combines:
 - **Version-isolated BM25 lexical retrieval** with in-memory caching
 - **Reciprocal Rank Fusion (RRF)**
 - **Table-aware reranking**
+- **Incremental spreadsheet synchronization** for editable CSV/XLSX documents
 - **Contextual document embeddings** (Document, Section, Subsection, Page Ranges)
 
 This approach improves both semantic understanding and exact-match retrieval for identifiers, spreadsheet data, and structured documents.

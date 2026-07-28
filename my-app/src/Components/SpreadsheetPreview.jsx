@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { apiFetch } from "../config";
+import { Edit2, Check, X } from "lucide-react";
 import "./SpreadsheetPreview.css";
+
 
 const formatCellValue = (val) => {
   if (val === null || val === undefined) return "";
@@ -27,6 +29,14 @@ const SpreadsheetPreview = ({ documentId, fileType }) => {
   const [error, setError] = useState("");
   const [workbook, setWorkbook] = useState(null);
   const [selectedSheetIndex, setSelectedSheetIndex] = useState(0);
+
+  // Cell Editing States
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [draftRows, setDraftRows] = useState(null);
+  const [mutationsDraft, setMutationsDraft] = useState([]);
+  const [editingCell, setEditingCell] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState(null);
 
   useEffect(() => {
     if (!documentId) {
@@ -71,6 +81,104 @@ const SpreadsheetPreview = ({ documentId, fileType }) => {
     };
   }, [documentId]);
 
+  // If active sheet changes, cancel any active edit mode
+  useEffect(() => {
+    setIsEditMode(false);
+    setDraftRows(null);
+    setMutationsDraft([]);
+    setEditingCell(null);
+  }, [selectedSheetIndex]);
+
+  const handleStartEdit = () => {
+    if (!workbook || !workbook.sheets || workbook.sheets.length === 0) return;
+    const activeSheet = workbook.sheets[selectedSheetIndex];
+    setIsEditMode(true);
+    setDraftRows(JSON.parse(JSON.stringify(activeSheet.rows)));
+    setMutationsDraft([]);
+    setEditingCell(null);
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditMode(false);
+    setDraftRows(null);
+    setMutationsDraft([]);
+    setEditingCell(null);
+  };
+
+  const commitCellChange = () => {
+    if (!editingCell) return;
+    const { rowIndex, colIndex, value } = editingCell;
+    const activeSheet = workbook.sheets[selectedSheetIndex];
+
+    const updatedDraftRows = [...draftRows];
+    updatedDraftRows[rowIndex][colIndex] = value;
+    setDraftRows(updatedDraftRows);
+
+    const originalValue = activeSheet.rows[rowIndex][colIndex];
+    const mutations = mutationsDraft.filter(m => !(m.row === rowIndex && m.column === colIndex));
+
+    if (String(originalValue) !== String(value)) {
+      mutations.push({
+        type: "update",
+        row: rowIndex,
+        column: colIndex,
+        value: value
+      });
+    }
+    setMutationsDraft(mutations);
+    setEditingCell(null);
+  };
+
+  const handleSaveAll = async () => {
+    if (mutationsDraft.length === 0) {
+      setIsEditMode(false);
+      setDraftRows(null);
+      return;
+    }
+
+    setSaving(true);
+    const activeSheet = workbook.sheets[selectedSheetIndex];
+
+    try {
+      const response = await apiFetch(`/api/document/${documentId}/table`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          sheet: activeSheet.name,
+          __v: activeSheet.__v || 0,
+          mutations: mutationsDraft,
+        }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.message || "Failed to save cell edits");
+      }
+
+      // Success: update the main workbook state permanently
+      const updatedSheets = [...workbook.sheets];
+      updatedSheets[selectedSheetIndex].rows = draftRows;
+      if (updatedSheets[selectedSheetIndex].__v !== undefined) {
+        updatedSheets[selectedSheetIndex].__v += 1;
+      }
+      setWorkbook({ ...workbook, sheets: updatedSheets });
+
+      setToast({ message: "Changes saved successfully!", type: "success" });
+      setTimeout(() => setToast(null), 3000);
+      setIsEditMode(false);
+      setDraftRows(null);
+      setMutationsDraft([]);
+    } catch (err) {
+      console.error("Failed to save cell edits:", err);
+      setToast({ message: err.message || "Failed to save changes", type: "error" });
+      setTimeout(() => setToast(null), 5000);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="spreadsheet-loading" aria-live="polite">
@@ -104,6 +212,27 @@ const SpreadsheetPreview = ({ documentId, fileType }) => {
 
   return (
     <div className="spreadsheet-preview">
+      {/* Action Header panel */}
+      <div className="spreadsheet-actions">
+        {isEditMode ? (
+          <>
+            <button className="btn-spreadsheet save" onClick={handleSaveAll} disabled={saving}>
+              <Check size={14} style={{ marginRight: 6 }} />
+              {saving ? "Saving..." : "Save Changes"}
+            </button>
+            <button className="btn-spreadsheet cancel" onClick={handleCancelEdit} disabled={saving}>
+              <X size={14} style={{ marginRight: 6 }} />
+              Cancel
+            </button>
+          </>
+        ) : (
+          <button className="btn-spreadsheet edit" onClick={handleStartEdit}>
+            <Edit2 size={12} style={{ marginRight: 6 }} />
+            Edit Table
+          </button>
+        )}
+      </div>
+
       {workbook.sheets.length > 1 && (
         <div className="sheet-tabs" role="tablist" aria-label="Spreadsheet sheets">
           {workbook.sheets.map((sheet, index) => (
@@ -114,6 +243,7 @@ const SpreadsheetPreview = ({ documentId, fileType }) => {
               className={`sheet-tab-button ${selectedSheetIndex === index ? "active" : ""}`}
               onClick={() => setSelectedSheetIndex(index)}
               title={sheet.name}
+              disabled={isEditMode}
             >
               {sheet.name}
             </button>
@@ -140,14 +270,45 @@ const SpreadsheetPreview = ({ documentId, fileType }) => {
                 </tr>
               </thead>
               <tbody>
-                {activeSheet.rows.map((row, rowIndex) => (
+                {(isEditMode ? draftRows : activeSheet.rows).map((row, rowIndex) => (
                   <tr key={rowIndex}>
                     <td className="row-index-cell">{rowIndex + 1}</td>
                     {row.map((cell, colIndex) => {
+                      const isEditing = editingCell && editingCell.rowIndex === rowIndex && editingCell.colIndex === colIndex;
                       const formatted = formatCellValue(cell);
+                      
+                      const isModified = draftRows && draftRows[rowIndex][colIndex] !== activeSheet.rows[rowIndex][colIndex];
+                      let tdClass = "";
+                      if (isEditMode) {
+                        tdClass = isModified ? "editable-cell modified-cell" : "editable-cell";
+                      }
+
                       return (
-                        <td key={colIndex} title={formatted}>
-                          {formatted}
+                        <td 
+                          key={colIndex} 
+                          className={tdClass}
+                          title={isEditing ? undefined : formatted}
+                          onClick={() => {
+                            if (isEditMode && !saving) {
+                              setEditingCell({ rowIndex, colIndex, value: String(cell || "") });
+                            }
+                          }}
+                        >
+                          {isEditing ? (
+                            <input
+                              className="editing-cell-input"
+                              value={editingCell.value}
+                              onChange={(e) => setEditingCell({ ...editingCell, value: e.target.value })}
+                              onBlur={commitCellChange}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") commitCellChange();
+                                if (e.key === "Escape") setEditingCell(null);
+                              }}
+                              autoFocus
+                            />
+                          ) : (
+                            formatted
+                          )}
                         </td>
                       );
                     })}
@@ -167,6 +328,12 @@ const SpreadsheetPreview = ({ documentId, fileType }) => {
             </span>
           </div>
         </>
+      )}
+
+      {toast && (
+        <div className={`spreadsheet-toast ${toast.type}`}>
+          {toast.type === "success" ? "✓" : "⚠"} {toast.message}
+        </div>
       )}
     </div>
   );

@@ -454,7 +454,7 @@ def test_whitespace_only_document():
 def test_push_chunks_called(fake_collection, mock_embedding, monkeypatch):
     captured = {}
 
-    def fake_push(doc_id, filename, chunk_records, index_version=None):
+    def fake_push(doc_id, filename, chunk_records, *args, **kwargs):
         captured["doc_id"] = doc_id
         captured["filename"] = filename
         captured["chunks"] = chunk_records

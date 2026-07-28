@@ -63,7 +63,7 @@ export const apiFetch = async (
   }
 
   try {
-    const res = await fetch(url, {
+    let res = await fetch(url, {
       ...rest,
       body,
       signal,
@@ -76,6 +76,51 @@ export const apiFetch = async (
         ...(extraHeaders || {}),
       },
     });
+
+    // Auto-recovery: If a mutating request fails with 403, the CSRF token may be expired or out of sync.
+    // Refresh the token via the authenticated /csrf endpoint and retry the request once.
+    if (res.status === 403 && isMutating && !isAuthRoute) {
+      console.warn("Mutating request failed with 403. Attempting automatic CSRF token recovery...");
+      
+      if (!activeCsrfPromise) {
+        activeCsrfPromise = (async () => {
+          try {
+            const refreshRes = await fetch(apiUrl("/api/auth/csrf"), {
+              credentials: "include",
+            });
+            if (refreshRes.ok) {
+              const refreshData = await refreshRes.json().catch(() => ({}));
+              if (refreshData.success && refreshData.data && refreshData.data.csrfToken) {
+                return refreshData.data.csrfToken;
+              }
+            }
+          } catch (err) {
+            console.error("Failed to refresh CSRF token in retry flow:", err);
+          } finally {
+            activeCsrfPromise = null;
+          }
+          return "";
+        })();
+      }
+
+      const refreshedToken = await activeCsrfPromise;
+      if (refreshedToken) {
+        console.info("CSRF token recovered. Retrying original request...");
+        res = await fetch(url, {
+          ...rest,
+          body,
+          signal,
+          credentials: "include",
+          headers: {
+            ...(body instanceof FormData
+              ? {}
+              : { "Content-Type": "application/json" }),
+            ...(extraHeaders || {}),
+            "X-CSRF-Token": refreshedToken,
+          },
+        });
+      }
+    }
 
     if (res.status === 401 && !isRedirecting && !isAuthRoute) {
       isRedirecting = true;

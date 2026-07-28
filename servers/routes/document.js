@@ -540,6 +540,18 @@ router.delete("/:id", verifyToken, ensureActive, verifyCsrf, async (req, res) =>
       logger.error({ err: chunkErr, documentId }, "Error deleting associated DocChunks");
       throw chunkErr;
     }
+
+    // Also delete associated DocumentTables
+    try {
+      const DocumentTable = require("../models/DocumentTable");
+      if (doc && doc.doc_id) {
+        await DocumentTable.deleteMany({ doc_id: doc.doc_id });
+        logger.info({ doc_id: doc.doc_id }, "Deleted associated DocumentTables");
+      }
+    } catch (tableErr) {
+      logger.error({ err: tableErr, documentId }, "Error deleting associated DocumentTables");
+      throw tableErr;
+    }
     
     res.json({ message: "Document deleted" });
   } catch (err) {
@@ -667,6 +679,25 @@ router.get("/:id/preview/spreadsheet", verifyToken, ensureActive, async (req, re
     }
 
     const data = await flaskRes.json();
+
+    try {
+      const DocumentTable = require("../models/DocumentTable");
+      const tables = await DocumentTable.find({ doc_id: doc.doc_id });
+      if (Array.isArray(data.sheets)) {
+        for (const sheet of data.sheets) {
+          const match = tables.find(t => 
+            t.sheet === sheet.name || 
+            (t.sheet === null && sheet.name === "CSV")
+          );
+          if (match) {
+            sheet.__v = match.__v;
+          }
+        }
+      }
+    } catch (dbErr) {
+      logger.error({ err: dbErr }, "Error matching DocumentTable version key in spreadsheet preview");
+    }
+
     return res.json(data);
   } catch (err) {
     logger.error({ err }, "Error fetching spreadsheet preview");
@@ -1215,5 +1246,243 @@ router.patch("/:id/text", verifyToken, ensureActive, verifyCsrf, async (req, res
       ? "Misconfigured Flask URL in production. Set FLASK_BASE_URL to your deployed Python backend."
       : undefined;
     return res.status(502).json({ message: msg, hint, target: FLASK_REPLACE_TEXT_URL });
+  }
+});
+
+
+// PATCH /:id/table - Synchronize cell table edits incrementally
+router.patch("/:id/table", verifyToken, ensureActive, verifyCsrf, async (req, res) => {
+  try {
+    const documentId = req.params.id;
+    const { sheet, mutations, __v } = req.body || {};
+
+    if (!Array.isArray(mutations) || mutations.length === 0) {
+      return res.status(400).json({ message: "Missing or empty mutations array" });
+    }
+    if (typeof __v !== "number") {
+      return res.status(400).json({ message: "Version key __v is required for optimistic locking" });
+    }
+
+    const DocumentTable = require("../models/DocumentTable");
+    const EditHistory = require("../models/EditHistory");
+
+    // 1. Fetch document and confirm ownership
+    const doc = await Document.findOne({ _id: documentId, user: req.userId });
+    if (!doc) {
+      return res.status(404).json({ message: "Document not found" });
+    }
+
+    // 2. Load DocumentTable record
+    const query = { doc_id: doc.doc_id };
+    if (sheet && sheet !== "CSV" && !(doc.name || "").toLowerCase().endsWith(".csv")) {
+      query.sheet = sheet;
+    } else {
+      query.sheet = null;
+    }
+    const table = await DocumentTable.findOne(query);
+    if (!table) {
+      return res.status(404).json({ message: "DocumentTable not found for the specified sheet" });
+    }
+
+    // 3. Optimistic locking check
+    if (table.__v !== __v) {
+      return res.status(409).json({ message: "Conflict: The table has been modified by another process. Please reload and try again." });
+    }
+
+    // 4. Validate sheet boundaries & cell values
+    for (const m of mutations) {
+      if (m.type !== "update") {
+        return res.status(400).json({ message: `Unsupported mutation type: ${m.type}` });
+      }
+      const r_idx = parseInt(m.row, 10);
+      const c_idx = parseInt(m.column, 10);
+      if (isNaN(r_idx) || isNaN(c_idx) || r_idx < 0 || c_idx < 0) {
+        return res.status(400).json({ message: `Invalid row or column index: row=${m.row}, column=${m.column}` });
+      }
+      if (r_idx >= table.rows.length) {
+        return res.status(400).json({ message: `Row index ${r_idx} is out of bounds (max ${table.rows.length - 1})` });
+      }
+      if (c_idx >= table.headers.length) {
+        return res.status(400).json({ message: `Column index ${c_idx} is out of bounds (max ${table.headers.length - 1})` });
+      }
+      if (typeof m.value !== "string" || m.value.length > 5000) {
+        return res.status(400).json({ message: `Value must be a string under 5000 characters` });
+      }
+    }
+
+    // 5. In-Memory Mutation (Write Buffering)
+    const originalRows = JSON.parse(JSON.stringify(table.rows)); // Deep copy old rows for audit logging
+    const previousContentHash = doc.contentHash;
+
+    for (const m of mutations) {
+      const r_idx = parseInt(m.row, 10);
+      const c_idx = parseInt(m.column, 10);
+      table.rows[r_idx][c_idx] = m.value;
+    }
+    table.markModified("rows");
+
+    // 6. Call Python Flask service to sync edits (re-embed changed chunks & rebuild BM25)
+    const fileBytesBase64 = doc.data.toString("base64");
+    const flaskRes = await fetch(`${FLASK_BASE}/api/internal/document/sync-table`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-service-token": process.env.SERVICE_TOKEN
+      },
+      body: JSON.stringify({
+        doc_id: doc.doc_id,
+        filename: doc.name,
+        index_version: doc.indexState.activeVersion,
+        sheet: sheet || null,
+        file_bytes: fileBytesBase64,
+        headers: table.headers,
+        rows: table.rows,
+        mutations
+      }),
+      timeout: 60000 // 60 seconds timeout
+    });
+
+    if (!flaskRes.ok) {
+      const errBody = await flaskRes.json().catch(() => ({}));
+      return res.status(flaskRes.status).json({
+        message: errBody.error || "Failed to synchronize changes with the AI service"
+      });
+    }
+
+    const syncData = await flaskRes.json();
+    if (!syncData.success) {
+      return res.status(500).json({ message: syncData.error || "AI Service synchronization returned failure" });
+    }
+
+    // 7. Commit changes to MongoDB (Only executes if Flask succeeded)
+    try {
+      await table.save();
+    } catch (saveErr) {
+      logger.error({ err: saveErr, documentId }, "CRITICAL: Failed to save updated DocumentTable after Flask index synchronization");
+      return res.status(500).json({ message: "Failed to persist document table edits inside database" });
+    }
+
+    // Compute new contentHash
+    const regeneratedBytes = Buffer.from(syncData.file_bytes, "base64");
+    const newContentHash = hashBuffer(regeneratedBytes);
+
+    if (newContentHash !== previousContentHash) {
+      doc.data = regeneratedBytes;
+      doc.size = regeneratedBytes.length;
+      doc.contentHash = newContentHash;
+      await doc.save();
+
+      // Write individual Audit history records for each mutation with retry on failure
+      const saveAuditHistory = async () => {
+        const auditRecords = mutations.map(m => {
+          const r_idx = parseInt(m.row, 10);
+          const c_idx = parseInt(m.column, 10);
+          return {
+            document_id: doc.doc_id,
+            sheet: sheet || null,
+            row: r_idx,
+            column: c_idx,
+            oldValue: originalRows[r_idx][c_idx] || "",
+            newValue: m.value,
+            mutationType: "cell",
+            previousContentHash,
+            newContentHash,
+            editedBy: req.userId
+          };
+        });
+        await EditHistory.insertMany(auditRecords);
+      };
+
+      try {
+        await saveAuditHistory();
+      } catch (auditErr) {
+        logger.warn({ err: auditErr, documentId }, "EditHistory insertMany failed, retrying once...");
+        try {
+          await saveAuditHistory();
+        } catch (retryErr) {
+          logger.error({ err: retryErr, documentId }, "CRITICAL: EditHistory insertMany failed on retry. Audit history log is incomplete.");
+        }
+      }
+    }
+
+    // Bulk update affected DocChunk text fields in MongoDB using decoupled chunk_index (with single retry)
+    if (Array.isArray(syncData.updated_chunks) && syncData.updated_chunks.length > 0) {
+      const updateDocChunks = async () => {
+        const bulkOps = syncData.updated_chunks.map(chunk => ({
+          updateOne: {
+            filter: { doc: doc._id, chunk: chunk.chunk_index, indexVersion: doc.indexState.activeVersion },
+            update: { $set: { text: chunk.text } }
+          }
+        }));
+        await DocChunk.bulkWrite(bulkOps);
+      };
+
+      try {
+        await updateDocChunks();
+      } catch (chunkErr) {
+        logger.warn({ err: chunkErr, documentId }, "DocChunk bulkWrite failed, retrying once...");
+        try {
+          await updateDocChunks();
+        } catch (retryErr) {
+          logger.error({ err: retryErr, documentId }, "CRITICAL: DocChunk bulkWrite failed on retry. MongoDB keyword search index is out-of-sync.");
+        }
+      }
+    }
+
+    // Handle paragraph chunk deletions and insertions in MongoDB
+    if (syncData.recreated_paragraphs) {
+      const { delete_chunk_indices, new_chunks } = syncData.recreated_paragraphs;
+
+      if (Array.isArray(delete_chunk_indices) && delete_chunk_indices.length > 0) {
+        const deleteDocChunks = async () => {
+          await DocChunk.deleteMany({
+            doc: doc._id,
+            indexVersion: doc.indexState.activeVersion,
+            chunk: { $in: delete_chunk_indices }
+          });
+        };
+        try {
+          await deleteDocChunks();
+        } catch (delErr) {
+          logger.warn({ err: delErr, documentId }, "DocChunk deleteMany failed, retrying once...");
+          try {
+            await deleteDocChunks();
+          } catch (retryErr) {
+            logger.error({ err: retryErr, documentId }, "CRITICAL: DocChunk deleteMany failed on retry.");
+          }
+        }
+      }
+
+      if (Array.isArray(new_chunks) && new_chunks.length > 0) {
+        const insertDocChunks = async () => {
+          const newDocs = new_chunks.map(c => ({
+            user: req.userId,
+            doc: doc._id,
+            doc_id: doc.doc_id,
+            filename: doc.name,
+            sheet: sheet || null,
+            chunk: c.chunk_index,
+            text: c.text,
+            indexVersion: doc.indexState.activeVersion
+          }));
+          await DocChunk.insertMany(newDocs);
+        };
+        try {
+          await insertDocChunks();
+        } catch (insErr) {
+          logger.warn({ err: insErr, documentId }, "DocChunk insertMany failed, retrying once...");
+          try {
+            await insertDocChunks();
+          } catch (retryErr) {
+            logger.error({ err: retryErr, documentId }, "CRITICAL: DocChunk insertMany failed on retry.");
+          }
+        }
+      }
+    }
+
+    res.json({ success: true, message: "Cell edits synchronized successfully" });
+  } catch (err) {
+    logger.error({ err }, "Error in table cell patch route");
+    res.status(500).json({ message: err.message || String(err) });
   }
 });

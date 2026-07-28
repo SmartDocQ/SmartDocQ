@@ -91,6 +91,8 @@ graph TD
 - **Rich Metadata Store**: records all structural page coordinates, counts, hashes, and pipeline versions.
 - **Automatic Duplicate Removal**: filters out repeated noise blocks.
 - **Automatic Version Validation**: enforces Vector index compatibility checks.
+- **Dual Spreadsheet Representations**: spreadsheets are indexed both as structured table chunks and narrative paragraph chunks to improve retrieval quality.
+
 
 ---
 
@@ -180,6 +182,8 @@ This contextual prepending guarantees that relevant facts are retrieved correctl
 - **Token-aware Chunk Sizing**
 - **Version-aware retrieval isolation**
 - **Automatic Index Version Validation**
+- **Incremental Spreadsheet Editing**
+
 
 ---
 
@@ -279,3 +283,48 @@ python -m pytest tests/test_embedding_service.py -v
 - `pipeline.py` — Structured extraction, embedding preparation, and shadow index construction
 - `chunking.py` — Markdown normalization, parsing, section detection, and token-aware chunking
 - `background.py` — Background indexing scheduler and recovery workflow
+
+---
+
+## INCREMENTAL TABLE CELL EDITING & CONSISTENCY MODEL
+
+SmartDocQ supports incremental editing for CSV and Excel (XLSX) documents without rebuilding the entire document index.
+
+### Editing Pipeline
+
+A spreadsheet edit follows this synchronization workflow:
+
+1. Validate ownership and optimistic version (`__v`) in Node.js.
+2. Apply cell mutations to the workbook in memory.
+3. Regenerate the modified workbook bytes.
+4. Incrementally update only affected table chunks.
+5. Rebuild paragraph chunks only when paragraph boundaries change; otherwise update them in place.
+6. Skip unchanged embeddings using chunk hash comparison.
+7. Update ChromaDB vectors.
+8. Update the in-memory BM25 index with debounced rebuilding.
+9. Persist workbook changes, audit history, and MongoDB `DocChunk` records.
+
+### Consistency Model
+
+The system uses best-effort consistency rather than distributed transactions.
+
+The synchronization order is:
+
+- ChromaDB
+- BM25
+- MongoDB
+
+If persistence fails after successful vector synchronization, the request returns HTTP `500`. Retry logic is applied to audit history and `DocChunk` persistence, but operators should rerun synchronization if consistency cannot be restored automatically.
+
+### Engineering Highlights (Spreadsheet Editing)
+
+The incremental spreadsheet editing feature implements several advanced engineering workflows to ensure low-latency updates and cross-system consistency:
+- **Incremental Re-indexing**: Avoids full document re-indexing on spreadsheet cell mutations by targeting and refreshing only the affected content chunks.
+- **Hash-based Embedding Reuse**: Computes SHA-256 signatures of modified blocks to prevent redundant Gemini embedding generation API calls.
+- **Optimistic Concurrency Control**: Uses Mongoose optimistic versioning (`__v`) to protect cell mutations and prevent concurrent write collisions.
+- **Cross-Store Synchronization**: Manages vector (ChromaDB), lexical (BM25), and database (MongoDB Mongoose models) stores in a synchronized transactional order.
+- **Audit Logging**: Maintains a precise cell-level modification history log via the `EditHistory` schema, capturing old values, new values, editor details, and checksums.
+- **Retry-based Persistence**: Includes single-retry error handling for critical asynchronous writes, such as audit logs and chunk text updates.
+- **Split-Strategy Chunk Coordination**: Dynamically updates table chunks in-place, while paragraph chunks are updated or regenerated based on boundary shift conditions.
+- **Cache Consistency**: Performs debounced lexical cache updates, keeping in-memory BM25 caches consistent with updated vector databases.
+

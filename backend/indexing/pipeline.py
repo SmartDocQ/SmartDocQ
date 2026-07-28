@@ -20,7 +20,11 @@ from indexing.chunking import (
     estimate_token_count,
 )
 
+import hashlib
 
+def compute_chunk_hash(text: str) -> str:
+    """Stable SHA-256 chunk text hash function used uniformly."""
+    return hashlib.sha256((text or "").encode("utf-8")).hexdigest()
 
 class IndexBuildError(Exception):
     pass
@@ -155,6 +159,7 @@ def build_chunk_metadata(
     row_end: int | None = None,
     markdown: str | None = None,
     index_version: str | None = None,
+    chunk_hash: str | None = None,
 ) -> dict:
     """Consolidated helper to build consistent vector metadata dicts."""
     cv = CHUNKING_VERSION
@@ -182,6 +187,8 @@ def build_chunk_metadata(
         "indexed_at": datetime.now(timezone.utc).isoformat(),
         "chunk_header": chunk_header,
     }
+    if chunk_hash:
+        meta["chunk_hash"] = chunk_hash
     if file_hash:
         meta["file_hash"] = file_hash
     if sheet:
@@ -340,7 +347,8 @@ def _index_blocks_pipeline(
             token_count=chunk["token_count"],
             chunk_header=meta_header,
             file_hash=file_hash,
-            index_version=index_version
+            index_version=index_version,
+            chunk_hash=compute_chunk_hash(c)
         )
 
         chunk_id = f"{doc_id}:{index_version}:{reserved_chunk_index}"
@@ -499,7 +507,8 @@ def _index_tables_spreadsheet(
                 row_start=row_start,
                 row_end=row_end,
                 markdown=md_meta,
-                index_version=index_version
+                index_version=index_version,
+                chunk_hash=compute_chunk_hash(flat)
             )
 
             chunk_id = f"{doc_id}:{index_version}:{reserved_chunk_index}"

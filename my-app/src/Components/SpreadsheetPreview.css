@@ -226,3 +226,147 @@
   font-size: 0.75rem;
   margin: 0;
 }
+
+/* Cell Editing Styles */
+.spreadsheet-table td.editable-cell {
+  cursor: pointer;
+  user-select: text;
+  position: relative;
+  transition: background-color 0.15s ease;
+}
+
+.spreadsheet-table td.editable-cell:hover {
+  background: rgba(0, 238, 118, 0.05) !important;
+  box-shadow: inset 0 0 0 1px rgba(0, 238, 118, 0.3);
+}
+
+.spreadsheet-table td.modified-cell {
+  background: rgba(0, 238, 118, 0.08) !important;
+  color: #00ee76 !important;
+  font-weight: 500;
+  box-shadow: inset 0 0 0 1px rgba(0, 238, 118, 0.2);
+}
+
+.editing-cell-input {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: #121212;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: inherit;
+  padding: 0 4px;
+  margin: 0;
+  outline: 1px solid #00ee76;
+  box-sizing: border-box;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 5;
+}
+
+/* Actions panel styling */
+.spreadsheet-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex: 0 0 auto;
+}
+
+.btn-spreadsheet {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 18px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  border: 1px solid transparent;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  letter-spacing: 0.01em;
+}
+
+.btn-spreadsheet.edit {
+  background: rgba(0, 238, 118, 0.05);
+  border: 1px solid rgba(0, 238, 118, 0.2);
+  color: #00ee76;
+}
+
+.btn-spreadsheet.edit:hover:not(:disabled) {
+  background: rgba(0, 238, 118, 0.12);
+  border-color: #00ee76;
+}
+
+.btn-spreadsheet.save {
+  background: linear-gradient(135deg, #065f46 0%, #064e3b 100%);
+  color: #d1fae5;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.btn-spreadsheet.save:hover:not(:disabled) {
+  background: linear-gradient(135deg, #047857 0%, #065f46 100%);
+  border-color: rgba(16, 185, 129, 0.55);
+}
+
+.btn-spreadsheet.cancel {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #9ea2a6;
+}
+
+.btn-spreadsheet.cancel:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.btn-spreadsheet:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.spreadsheet-toast {
+  position: absolute;
+  bottom: 50px;
+  right: 20px;
+  background: #18181c;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 20;
+  animation: spreadsheet-slide-in 0.2s ease-out;
+}
+
+.spreadsheet-toast.error {
+  border-color: rgba(238, 76, 76, 0.4);
+  background: #1c0e0e;
+}
+
+.spreadsheet-toast.success {
+  border-color: rgba(0, 238, 118, 0.4);
+  background: #0e1c12;
+}
+
+@keyframes spreadsheet-slide-in {
+  from {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+

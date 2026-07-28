@@ -31,6 +31,8 @@ CORS(app, resources={r"/*": {"origins": ALLOWED_ORIGINS}}, supports_credentials=
 # ====== BLUEPRINTS ======
 app.register_blueprint(document_bp)
 app.register_blueprint(ask_bp)
+from features.table_edit import table_edit_bp
+app.register_blueprint(table_edit_bp)
 
 # ====== EXTERNAL BLUEPRINTS (quiz, flashcard, summarize) ======
 try:
