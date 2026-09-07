@@ -43,8 +43,9 @@ export const apiFetch = async (
           });
           if (refreshRes.ok) {
             const refreshData = await refreshRes.json().catch(() => ({}));
-            if (refreshData.success && refreshData.data && refreshData.data.csrfToken) {
-              return refreshData.data.csrfToken;
+            if (refreshData.success) {
+              const token = refreshData.data?.csrfToken ?? refreshData.csrfToken;
+              if (token) return token;
             }
           }
         } catch (err) {
@@ -90,8 +91,9 @@ export const apiFetch = async (
             });
             if (refreshRes.ok) {
               const refreshData = await refreshRes.json().catch(() => ({}));
-              if (refreshData.success && refreshData.data && refreshData.data.csrfToken) {
-                return refreshData.data.csrfToken;
+              if (refreshData.success) {
+                const token = refreshData.data?.csrfToken ?? refreshData.csrfToken;
+                if (token) return token;
               }
             }
           } catch (err) {

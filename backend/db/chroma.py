@@ -23,7 +23,7 @@ def _try_persistent(path: str):
         cli = chromadb.PersistentClient(path=path, settings=_chroma_settings)
         logger.info("Chroma persistent path: %s", path)
         return cli
-    except Exception as e:
+    except BaseException as e:
         logger.warning("PersistentClient failed for %s: %s", path, e)
         return None
 

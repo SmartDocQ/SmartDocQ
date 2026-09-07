@@ -188,7 +188,7 @@ flowchart TD
     --> F["Section-aware Chunking\n(Isolated table/code chunks, snapped text bounds)"]
     --> G["Token-aware Packing\n(tiktoken bounds packing with overlap bounds mapping)"]
     --> H["Contextual Headers\n(Prepending Document, Section, Subsection, Page Range)"]
-    --> I["Gemini Embeddings\n(gemini-embedding-exp-03-07 vector calculation)"]
+    --> I["Gemini Embeddings\n(models/gemini-embedding-2)"]
     --> J[("ChromaDB Storage\nClean text documents + detailed metadata")]
 ```
 
@@ -242,11 +242,15 @@ SmartDocQ uses a Hybrid RAG pipeline that combines:
 - **Semantic vector retrieval** (ChromaDB + gemini-embedding-2)
 - **Version-isolated BM25 lexical retrieval** with in-memory caching
 - **Reciprocal Rank Fusion (RRF)**
-- **Table-aware reranking**
+- **Table-aware ranking**
 - **Incremental spreadsheet synchronization** for editable CSV/XLSX documents
 - **Contextual document embeddings** (Document, Section, Subsection, Page Ranges)
 
 This approach improves both semantic understanding and exact-match retrieval for identifiers, spreadsheet data, and structured documents.
+
+### Retrieval Evaluation
+
+The retrieval pipeline includes a reproducible benchmarking module using the BEIR SciFact dataset to evaluate retrieval quality and latency. Experimental retrieval configurations are evaluated separately from the production pipeline. For details, see [backend/benchmark/README.md](backend/benchmark/README.md).
 
 ---
 

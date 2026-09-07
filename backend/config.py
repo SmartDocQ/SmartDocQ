@@ -96,3 +96,15 @@ FLASK_DEBUG = os.environ.get("FLASK_DEBUG", "0").strip().lower() in ("1", "true"
 # ====== SPREADSHEET PREVIEW CONFIG ======
 MAX_PREVIEW_ROWS_PER_SHEET = int(os.environ.get("MAX_PREVIEW_ROWS_PER_SHEET", "500"))
 MAX_PREVIEW_COLUMNS = int(os.environ.get("MAX_PREVIEW_COLUMNS", "100"))
+
+# ====== RERANKER CONFIG ======
+ENABLE_RERANKER = os.environ.get("ENABLE_RERANKER", "False").strip().lower() in ("1", "true", "yes")
+RERANKER_MODEL = os.environ.get("RERANKER_MODEL", "BAAI/bge-reranker-base")
+RERANKER_DEVICE = os.environ.get("RERANKER_DEVICE", "auto")
+RERANK_TOP_K = int(os.environ.get("RERANK_TOP_K", "15"))
+FINAL_CONTEXT_TOP_K = int(os.environ.get("FINAL_CONTEXT_TOP_K", "5"))
+ENABLE_RERANKER_CACHE = os.environ.get("ENABLE_RERANKER_CACHE", "True").strip().lower() in ("1", "true", "yes")
+RERANKER_CACHE_SIZE = int(os.environ.get("RERANKER_CACHE_SIZE", "128"))
+RERANKER_CACHE_TTL = int(os.environ.get("RERANKER_CACHE_TTL", "1800"))  # 30 minutes
+RERANKER_BATCH_SIZE = int(os.environ.get("RERANKER_BATCH_SIZE", "16"))
+

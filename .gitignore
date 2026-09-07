@@ -10,10 +10,19 @@ dist/
 
 # Python
 __pycache__/
+**/__pycache__/
 *.pyc
 .env
 .env.*
 *.env
+
+# Benchmark datasets & large evaluation logs
+backend/benchmark/datasets/
+backend/benchmark/results/per_query_results.json
+backend/benchmark/results/query_emb_cache.json
+benchmark/datasets/
+benchmark/results/per_query_results.json
+benchmark/results/query_emb_cache.json
 
 # Logs
 *.log

@@ -12,10 +12,12 @@ import logging
 import threading
 import time
 
+from typing import Any
 from config import NODE_BASE_URL, SERVICE_TOKEN, NODE_FETCH_TIMEOUT
 from db.chroma import collection
 from services.embedding_service import embed_query
 from services.bm25_service import bm25_search
+from services.reranker_service import rerank
 
 logger = logging.getLogger(__name__)
 
@@ -132,7 +134,7 @@ _vv_module = None
 _indexer_module = None
 
 
-def retrieve_context(question: str, doc_id: str) -> tuple[str | None, str | None]:
+def retrieve_context(question: str, doc_id: str, return_candidates: bool = False) -> tuple[str | None, str | None] | list[dict[str, Any]]:
     """Hybrid retrieval: Vector (Chroma, top-20) + BM25 (cached, top-20),
     fused with Reciprocal Rank Fusion.
     Final score = RRF_WEIGHT * rrf + SIM_WEIGHT * sim  (env-var configurable).
@@ -150,6 +152,16 @@ def retrieve_context(question: str, doc_id: str) -> tuple[str | None, str | None
     chroma_query_ms = 0.0
     bm25_ms = 0.0
     fusion_ms = 0.0
+    rerank_ms = 0.0
+
+    def log_latency():
+        dense_ms = embed_query_ms + chroma_query_ms
+        rrf_ms = fusion_ms
+        retrieval_total_ms = (time.perf_counter() - t_start) * 1000
+        logger.info(
+            "[Retrieval Latency] doc_id=%s index_state_fetch_ms=%.2f dense_ms=%.2f embed_query_ms=%.2f chroma_query_ms=%.2f bm25_ms=%.2f fusion_ms=%.2f rrf_ms=%.2f rerank_ms=%.2f retrieval_total_ms=%.2f",
+            doc_id, index_state_fetch_ms, dense_ms, embed_query_ms, chroma_query_ms, bm25_ms, fusion_ms, rrf_ms, rerank_ms, retrieval_total_ms
+        )
 
     # --- 1. Version Resolution & Fallback ---
     t_fetch_start = time.perf_counter()
@@ -159,7 +171,7 @@ def retrieve_context(question: str, doc_id: str) -> tuple[str | None, str | None
     active_version = state.get("activeVersion")
     
     if not active_version:
-        # Check if legacy chunks exist in Chroma. If yes, trigger background reindex and allow legacy search.
+        # Check if legacy chunks exist in Chroma. If legacy exist, reindex in bg and allow legacy search.
         global _indexer_module
         if _indexer_module is None:
             import indexing.indexer as idxr
@@ -170,13 +182,8 @@ def retrieve_context(question: str, doc_id: str) -> tuple[str | None, str | None
             where = {"doc_id": doc_id}
         else:
             logger.warning("[Retrieval] No active version and no legacy chunks found for doc_id=%s", doc_id)
-            ret_val = (None, None)
-            retrieval_total_ms = (time.perf_counter() - t_start) * 1000
-            logger.info(
-                "[Retrieval Latency] doc_id=%s index_state_fetch_ms=%.2f embed_query_ms=%.2f chroma_query_ms=%.2f bm25_ms=%.2f fusion_ms=%.2f retrieval_total_ms=%.2f",
-                doc_id, index_state_fetch_ms, embed_query_ms, chroma_query_ms, bm25_ms, fusion_ms, retrieval_total_ms
-            )
-            return ret_val
+            log_latency()
+            return (None, None)
     else:
         where = {
             "$and": [
@@ -192,13 +199,8 @@ def retrieve_context(question: str, doc_id: str) -> tuple[str | None, str | None
     
     if not q_emb:
         logger.error("[Retrieval] Embedding failed")
-        ret_val = (None, "Failed to generate embedding")
-        retrieval_total_ms = (time.perf_counter() - t_start) * 1000
-        logger.info(
-            "[Retrieval Latency] doc_id=%s index_state_fetch_ms=%.2f embed_query_ms=%.2f chroma_query_ms=%.2f bm25_ms=%.2f fusion_ms=%.2f retrieval_total_ms=%.2f",
-            doc_id, index_state_fetch_ms, embed_query_ms, chroma_query_ms, bm25_ms, fusion_ms, retrieval_total_ms
-        )
-        return ret_val
+        log_latency()
+        return (None, "Failed to generate embedding")
 
     t_chroma_start = time.perf_counter()
     results = collection.query(
@@ -220,7 +222,7 @@ def retrieve_context(question: str, doc_id: str) -> tuple[str | None, str | None
         if not doc_txt:
             continue
         meta = metas[i] if i < len(metas) and isinstance(metas[i], dict) else {}
-        # If in legacy mode, filter out any versioned building/failed chunks that may exist in Chroma
+        # Filter out building/failed chunks in legacy mode
         if not active_version and meta.get("index_version"):
             continue
         dist = float(dist) if dist is not None else 0.5
@@ -234,15 +236,10 @@ def retrieve_context(question: str, doc_id: str) -> tuple[str | None, str | None
 
     if not vector_hits and not bm25_hits:
         logger.warning("[Retrieval] No results from either search for doc_id=%s", doc_id)
-        ret_val = (None, None)
-        retrieval_total_ms = (time.perf_counter() - t_start) * 1000
-        logger.info(
-            "[Retrieval Latency] doc_id=%s index_state_fetch_ms=%.2f embed_query_ms=%.2f chroma_query_ms=%.2f bm25_ms=%.2f fusion_ms=%.2f retrieval_total_ms=%.2f",
-            doc_id, index_state_fetch_ms, embed_query_ms, chroma_query_ms, bm25_ms, fusion_ms, retrieval_total_ms
-        )
-        return ret_val
+        log_latency()
+        return (None, None)
 
-    # --- 3. RRF Fusion keyed by chunk_id ---
+    # --- 4. RRF Fusion keyed by chunk_id ---
     t_fusion_start = time.perf_counter()
     rrf_scores: dict[str, float] = {}
     chunk_text_map: dict[str, str] = {}
@@ -266,7 +263,7 @@ def retrieve_context(question: str, doc_id: str) -> tuple[str | None, str | None
             chunk_is_table_map[cid] = is_table
         logger.debug("[BM25] rank=%d chunk=%s bm25=%.4f", rank, cid, bm25_score)
 
-    # --- 4. Compute final scores and apply table boost ---
+    # --- 5. Compute final scores and apply table boost ---
     table_intent = _table_intent_strength(question)
     candidates: list[dict] = []
 
@@ -293,42 +290,47 @@ def retrieve_context(question: str, doc_id: str) -> tuple[str | None, str | None
         candidates.append({"chunk_id": cid, "text": text, "score": final_score})
 
     if not candidates:
-        ret_val = (None, None)
         fusion_ms = (time.perf_counter() - t_fusion_start) * 1000
-        retrieval_total_ms = (time.perf_counter() - t_start) * 1000
-        logger.info(
-            "[Retrieval Latency] doc_id=%s index_state_fetch_ms=%.2f embed_query_ms=%.2f chroma_query_ms=%.2f bm25_ms=%.2f fusion_ms=%.2f retrieval_total_ms=%.2f",
-            doc_id, index_state_fetch_ms, embed_query_ms, chroma_query_ms, bm25_ms, fusion_ms, retrieval_total_ms
-        )
-        return ret_val
+        log_latency()
+        return (None, None)
 
     candidates.sort(key=lambda x: float(x.get("score") or 0.0), reverse=True)
-    top5 = candidates[:5]
+    fusion_ms = (time.perf_counter() - t_fusion_start) * 1000
+
+    # --- 6. Reranking Stage ---
+    from config import ENABLE_RERANKER, RERANK_TOP_K, FINAL_CONTEXT_TOP_K
+    if ENABLE_RERANKER:
+        t_rerank_start = time.perf_counter()
+        slice_k = min(RERANK_TOP_K, len(candidates))
+        candidates_to_rerank = candidates[:slice_k]
+        remaining_candidates = candidates[slice_k:]
+        try:
+            reranked_subset = rerank(question, candidates_to_rerank)
+            candidates = reranked_subset + remaining_candidates
+        except Exception:
+            logger.exception("[Retrieval] Reranking failed")
+            if os.environ.get("BENCHMARK_STRICT_RERANKER", "false").lower() == "true":
+                raise
+            logger.warning("[Retrieval] Falling back to original RRF order")
+        rerank_ms = (time.perf_counter() - t_rerank_start) * 1000
+
+    if return_candidates:
+        log_latency()
+        return candidates
+    top_candidates = candidates[:FINAL_CONTEXT_TOP_K]
 
     logger.info(
         "[Retrieval Selected] top=%d total_candidates=%d vector_hits=%d bm25_hits=%d",
-        len(top5), len(candidates), len(vector_hits), len(bm25_hits),
+        len(top_candidates), len(candidates), len(vector_hits), len(bm25_hits),
     )
 
-    chosen = [c["text"] for c in top5 if c.get("text")]
+    chosen = [c["text"] for c in top_candidates if c.get("text")]
     if not chosen:
-        ret_val = (None, None)
-        fusion_ms = (time.perf_counter() - t_fusion_start) * 1000
-        retrieval_total_ms = (time.perf_counter() - t_start) * 1000
-        logger.info(
-            "[Retrieval Latency] doc_id=%s index_state_fetch_ms=%.2f embed_query_ms=%.2f chroma_query_ms=%.2f bm25_ms=%.2f fusion_ms=%.2f retrieval_total_ms=%.2f",
-            doc_id, index_state_fetch_ms, embed_query_ms, chroma_query_ms, bm25_ms, fusion_ms, retrieval_total_ms
-        )
-        return ret_val
+        log_latency()
+        return (None, None)
 
-    ret_val = ("\n\n".join(chosen), None)
-    fusion_ms = (time.perf_counter() - t_fusion_start) * 1000
-    retrieval_total_ms = (time.perf_counter() - t_start) * 1000
-    logger.info(
-        "[Retrieval Latency] doc_id=%s index_state_fetch_ms=%.2f embed_query_ms=%.2f chroma_query_ms=%.2f bm25_ms=%.2f fusion_ms=%.2f retrieval_total_ms=%.2f",
-        doc_id, index_state_fetch_ms, embed_query_ms, chroma_query_ms, bm25_ms, fusion_ms, retrieval_total_ms
-    )
-    return ret_val
+    log_latency()
+    return ("\n\n".join(chosen), None)
 
 
 def fetch_doc_from_node(doc_id: str):

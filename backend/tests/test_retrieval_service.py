@@ -9,6 +9,8 @@ import pytest
 
 # Ensure backend/config.py can import in test environments.
 os.environ.setdefault("SERVICE_TOKEN", "test")
+os.environ.setdefault("RERANKER_MODEL", "mock")
+os.environ.setdefault("ENABLE_RERANKER", "True")
 
 # ---------------------------------------------------------------------------
 # Stub external deps BEFORE importing indexer / retrieval_service
@@ -820,4 +822,38 @@ def test_retrieval_uses_embed_query():
             retrieval_service.retrieve_context("User question", "doc123")
 
             mock_query.assert_called_once_with("User question")
+
+
+def test_retrieval_integration_with_rerank(monkeypatch):
+    """Verify that retrieval service invokes rerank and uses its results."""
+    from unittest.mock import patch
+    import services.retrieval_service as rs
+    
+    # Mock collection query to return candidates
+    docs = ["chunk text 1", "chunk text 2", "chunk text 3"]
+    dists = [0.1, 0.2, 0.3]
+    metas = [{"is_table": False}, {"is_table": False}, {"is_table": False}]
+    
+    monkeypatch.setattr(rs, "collection", FakeRetrievalCollection(docs, dists, metas))
+    monkeypatch.setattr("config.ENABLE_RERANKER", True)
+    monkeypatch.setattr("config.RERANK_TOP_K", 3)
+    monkeypatch.setattr("config.FINAL_CONTEXT_TOP_K", 2)
+    
+    with patch("services.retrieval_service.rerank") as mock_rerank:
+        # Mock rerank to return candidates sorted differently
+        mock_rerank.return_value = [
+            {"chunk_id": "doc1_2", "text": "chunk text 3", "score": 10.0},
+            {"chunk_id": "doc1_0", "text": "chunk text 1", "score": 9.0},
+            {"chunk_id": "doc1_1", "text": "chunk text 2", "score": 8.0},
+        ]
+        
+        ctx, err = rs.retrieve_context("Test query", "doc1")
+        
+        assert err is None
+        assert ctx is not None
+        # Should call rerank with query and candidates list
+        assert mock_rerank.called
+        # Should slice top 2 final context chunks (which are "chunk text 3" and "chunk text 1")
+        assert ctx == "chunk text 3\n\nchunk text 1"
+
 

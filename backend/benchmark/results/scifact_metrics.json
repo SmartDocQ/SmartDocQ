@@ -1,0 +1,84 @@
+{
+    "corpus_info": {
+        "documents_indexed": 5183,
+        "queries_evaluated": 300
+    },
+    "model_info": {
+        "embedding_model": "models/gemini-embedding-2",
+        "reranker_model": "BAAI/bge-reranker-base"
+    },
+    "retrieval_config": {
+        "dense_top_k": 20,
+        "bm25_top_k": 20,
+        "configured_max_candidate_pool_size": 40,
+        "rerank_top_k": 15,
+        "final_top_k": 5
+    },
+    "candidate_pool": {
+        "max_configured": 40,
+        "average_actual": 33.2,
+        "min_actual": 21,
+        "max_actual": 40
+    },
+    "query_embedding_cache": {
+        "enabled": true,
+        "shared_between_baseline_and_reranked": true,
+        "query_embedding_latency": {
+            "baseline_actual_ms": 582.4855333333334,
+            "reranked_shared_cached_ms": 582.4855333333334
+        }
+    },
+    "latency_baseline_ms": {
+        "dense_search": 103.96756666666667,
+        "bm25": 41.993900000000004,
+        "rrf": 2.9853333333333336,
+        "pipeline_total_excl_embed": 149.09053333333327,
+        "total": 731.5760666666666
+    },
+    "latency_reranked_ms": {
+        "dense_search": 86.25813333333333,
+        "bm25": 40.58546666666666,
+        "rrf": 2.779533333333333,
+        "cross_encoder": 15243.345633333334,
+        "pipeline_total_excl_embed": 15373.116199999999,
+        "total_estimated_with_shared_embed": 15955.601733333332
+    },
+    "reranker_component_overhead_ms": 15243.345633333334,
+    "paired_pipeline_delta_ms": 15224.025666666665,
+    "paired_pipeline_delta_pct": 10211.262463344423,
+    "baseline_metrics": {
+        "ndcg@5": 0.8293844165076776,
+        "mrr@5": 0.8092222222222223,
+        "recall@5": 0.9145555555555556,
+        "precision@5": 0.20400000000000001,
+        "recall@pool": 0.9866666666666667,
+        "recall@bge_input": 0.98
+    },
+    "reranked_metrics": {
+        "ndcg@5": 0.733718018845688,
+        "mrr@5": 0.7106666666666667,
+        "recall@5": 0.8330555555555555,
+        "precision@5": 0.18333333333333332,
+        "recall@pool": 0.9866666666666667,
+        "recall@bge_input": 0.98
+    },
+    "reranker_statistics": {
+        "queries_evaluated": 300,
+        "queries_processed_by_reranker": 300,
+        "candidate_order_changed": 300,
+        "candidate_order_changed_pct": 100.0,
+        "top5_membership_changed": 276,
+        "top5_membership_changed_pct": 92.0,
+        "top5_order_changed": 294,
+        "top5_order_changed_pct": 98.0,
+        "top1_changed": 99,
+        "top1_changed_pct": 33.0,
+        "avg_rank_movement": 1.6740088105726871,
+        "ndcg_improved": 27,
+        "ndcg_unchanged": 185,
+        "ndcg_degraded": 88,
+        "mrr_improved": 26,
+        "mrr_unchanged": 199,
+        "mrr_degraded": 75
+    }
+}
