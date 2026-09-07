@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import { resetPassword } from "../../Services/AuthService";
 import { useToast } from "../Toast/ToastContext";
 import PasswordStrength from "./PasswordStrength";
@@ -85,6 +85,11 @@ export default function ResetPasswordPage() {
           <p className="form-subtitle">
             This password reset link is missing or invalid.
           </p>
+          <div style={{ marginTop: "20px", display: "flex", gap: "12px", justifyContent: "center" }}>
+            <Link to="/" style={{ color: "#00f2fe", textDecoration: "none" }}>Go to Home</Link>
+            <span style={{ opacity: 0.5 }}>|</span>
+            <Link to="/help" style={{ color: "#00f2fe", textDecoration: "none" }}>Help Center</Link>
+          </div>
         </div>
       </div>
     );

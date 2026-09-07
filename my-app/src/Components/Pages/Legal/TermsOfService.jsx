@@ -27,6 +27,11 @@ export default function TermsOfService() {
       <div className="leg-glow-bg" aria-hidden="true" />
       <div className="terms-container">
         <header id="top" className="terms-hero">
+          <nav className="legal-breadcrumb" style={{ marginBottom: "16px", fontSize: "0.9rem", color: "rgba(255,255,255,0.7)" }}>
+            <Link to="/" style={{ color: "#00f2fe", textDecoration: "none" }}>← Home</Link>
+            <span style={{ margin: "0 8px", opacity: 0.5 }}>|</span>
+            <Link to="/help" style={{ color: "#00f2fe", textDecoration: "none" }}>Help Center</Link>
+          </nav>
           <h1>Terms of Service</h1>
           <p className="terms-subtitle">Effective Date: June 14, 2026</p>
           <div className="terms-hero-divider"></div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, Link } from "react-router-dom";
 import "./HelpCenter.css";
 
 const HELP_SECTIONS = [
@@ -174,6 +174,9 @@ export default function HelpCenter() {
         
         {/* Hero Area */}
         <header className="hc-hero-section">
+          <nav className="breadcrumb-nav" style={{ marginBottom: "16px", fontSize: "0.9rem", color: "rgba(255,255,255,0.7)" }}>
+            <Link to="/" style={{ color: "#00f2fe", textDecoration: "none" }}>← Back to Home</Link>
+          </nav>
           <h1 className="hc-hero-title">Help Center</h1>
           <p className="hc-hero-subtitle">Search documentation, quick-start guides, security compliance details, and FAQs.</p>
           
@@ -311,16 +314,16 @@ export default function HelpCenter() {
                 <div className="hc-legal-item">
                   <h3>Privacy Policy</h3>
                   <p>Read our full statement on how we scan, secure, and index your private documents.</p>
-                  <a href="/privacy" className="hc-legal-link-btn">
+                  <Link to="/privacy" className="hc-legal-link-btn">
                     Read Privacy Policy &rarr;
-                  </a>
+                  </Link>
                 </div>
                 <div className="hc-legal-item">
                   <h3>Terms of Service</h3>
                   <p>Understand the usage guidelines, system limitations, and service policies of SmartDocQ.</p>
-                  <a href="/terms" className="hc-legal-link-btn">
+                  <Link to="/terms" className="hc-legal-link-btn">
                     Read Terms of Service &rarr;
-                  </a>
+                  </Link>
                 </div>
               </div>
             </section>

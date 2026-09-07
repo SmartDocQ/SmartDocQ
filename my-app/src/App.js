@@ -1,5 +1,6 @@
-import { BrowserRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { BrowserRouter, Route, Routes, useLocation, Link } from 'react-router-dom';
 import { useEffect, useState, lazy, Suspense } from 'react';
+import useSeo from './hooks/useSeo';
 import Lottie from 'lottie-react';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { ToastProvider } from './Components/Toast/ToastContext';
@@ -115,9 +116,23 @@ function Main() {
                   style={{ width: 220, maxWidth: '80%', marginBottom: 24 }}
                 />
                 <h1 style={{ fontSize: "2rem", marginBottom: "12px" }}>Page not found</h1>
-                <p style={{ opacity: 0.7 }}>
+                <p style={{ opacity: 0.7, marginBottom: "20px" }}>
                   The page you&apos;re looking for doesn&apos;t exist or has moved.
                 </p>
+                <Link
+                  to="/"
+                  style={{
+                    padding: "10px 20px",
+                    background: "linear-gradient(135deg, #00f2fe 0%, #4facfe 100%)",
+                    color: "#0b0f19",
+                    fontWeight: "600",
+                    borderRadius: "8px",
+                    textDecoration: "none",
+                    display: "inline-block"
+                  }}
+                >
+                  Go Back to Home
+                </Link>
               </div>
             </PageLayout>
           )}
@@ -138,6 +153,7 @@ function AppContent() {
   const [revealStarted, setRevealStarted] = useState(hasShownLanding);
   const [showLogin, setShowLogin] = useState(false);
   const location = useLocation();
+  useSeo();
 
   const isResetRoute = location.pathname === '/reset-password';
   const shouldShowLanding = !isResetRoute && !hasShownLanding;

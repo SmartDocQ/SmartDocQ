@@ -27,6 +27,11 @@ export default function PrivacyPolicy() {
       <div className="leg-glow-bg" aria-hidden="true" />
       <div className="privacy-container">
         <header id="top" className="privacy-hero">
+          <nav className="legal-breadcrumb" style={{ marginBottom: "16px", fontSize: "0.9rem", color: "rgba(255,255,255,0.7)" }}>
+            <Link to="/" style={{ color: "#00f2fe", textDecoration: "none" }}>← Home</Link>
+            <span style={{ margin: "0 8px", opacity: 0.5 }}>|</span>
+            <Link to="/help" style={{ color: "#00f2fe", textDecoration: "none" }}>Help Center</Link>
+          </nav>
           <h1>Privacy Policy</h1>
           <p className="privacy-subtitle">Effective Date: June 14, 2026</p>
           <div className="privacy-hero-divider"></div>
