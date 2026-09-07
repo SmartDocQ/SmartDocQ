@@ -7,6 +7,7 @@ const Document = require("../models/Document");
 const DocChunk = require("../models/DocChunk");
 const { verifyToken, ensureActive } = require("../middlewares/auth");
 const { verifyCsrf } = require("../middlewares/csrf");
+const { deleteDocumentVectors } = require("../utils/vectorStore");
 const fetch = require("node-fetch");
 const logger = require("../lib/logger");
 const rateLimit = require("express-rate-limit");
@@ -511,52 +512,43 @@ router.delete("/:id", verifyToken, ensureActive, verifyCsrf, async (req, res) =>
     
     logger.info({ documentId, userId }, "Deleting document");
     
-    const doc = await Document.findOneAndDelete({ _id: documentId, user: userId });
+    const doc = await Document.findOne({ _id: documentId, user: userId });
     if (!doc) return res.status(404).json({ message: "Document not found" });
-    
-    logger.info({ documentId }, "Document deleted successfully");
-    
-    // Also delete associated chat if it exists
-    try {
-      const Chat = require("../models/Chat");
-      const deletedChat = await Chat.findOneAndDelete({
-        user: userId,
-        document: documentId
-      });
-      if (deletedChat) {
-        logger.info({ documentId, messageCount: deletedChat.messages.length }, "Deleted associated chat");
-      }
-    } catch (chatErr) {
-      logger.error({ err: chatErr, documentId }, "Error deleting associated chat");
-      throw chatErr;
-    }
-    
-    // Also delete associated DocChunks
-    try {
-      const DocChunk = require("../models/DocChunk");
-      await DocChunk.deleteMany({ doc: documentId });
-      logger.info({ documentId }, "Deleted associated DocChunks");
-    } catch (chunkErr) {
-      logger.error({ err: chunkErr, documentId }, "Error deleting associated DocChunks");
-      throw chunkErr;
-    }
 
-    // Also delete associated DocumentTables
-    try {
-      const DocumentTable = require("../models/DocumentTable");
-      if (doc && doc.doc_id) {
-        await DocumentTable.deleteMany({ doc_id: doc.doc_id });
-        logger.info({ doc_id: doc.doc_id }, "Deleted associated DocumentTables");
-      }
-    } catch (tableErr) {
-      logger.error({ err: tableErr, documentId }, "Error deleting associated DocumentTables");
-      throw tableErr;
+    // Delete ChromaDB vectors first before removing MongoDB data
+    if (doc.doc_id) {
+      await deleteDocumentVectors(doc.doc_id);
     }
     
+    // Delete associated chat
+    const Chat = require("../models/Chat");
+    const deletedChat = await Chat.findOneAndDelete({
+      user: userId,
+      document: documentId
+    });
+    if (deletedChat) {
+      logger.info({ documentId, messageCount: deletedChat.messages?.length || 0 }, "Deleted associated chat");
+    }
+    
+    // Delete associated DocChunks
+    await DocChunk.deleteMany({ doc: documentId });
+    logger.info({ documentId }, "Deleted associated DocChunks");
+
+    // Delete associated DocumentTables
+    const DocumentTable = require("../models/DocumentTable");
+    if (doc.doc_id) {
+      await DocumentTable.deleteMany({ doc_id: doc.doc_id });
+      logger.info({ doc_id: doc.doc_id }, "Deleted associated DocumentTables");
+    }
+    
+    // Finally delete document from MongoDB
+    await Document.deleteOne({ _id: documentId, user: userId });
+    logger.info({ documentId, doc_id: doc.doc_id }, "Document deletion completed");
+
     res.json({ message: "Document deleted" });
   } catch (err) {
-    logger.error({ err }, "Error in document deletion");
-    res.status(500).json({ message: err.message });
+    logger.error({ err, documentId: req.params.id }, "Error in document deletion");
+    res.status(500).json({ message: "Failed to delete document" });
   }
 });
 

@@ -58,6 +58,13 @@ const Chat = ({ chat, setChat, chatInput, setChatInput, sendMessage, clearChat, 
   // Format message text to HTML with proper line breaks and formatting
   const formatMessageText = (text) => {
     if (!text) return '';
+
+    if (text.includes("Chat unavailable in demo") || text.includes("Query failed") || text.includes("Error contacting assistant")) {
+      return `<div>
+        <strong style="display: block; font-size: 0.95rem; font-weight: 600; margin-bottom: 2px;">⚠️ Chat unavailable in demo</strong>
+        <span style="display: block; font-size: 0.8rem; opacity: 0.85; line-height: 1.3;">AI responses aren't enabled in this deployment.</span>
+      </div>`;
+    }
     
     // Escape HTML to prevent XSS attacks
     const escapeHtml = (unsafe) => {

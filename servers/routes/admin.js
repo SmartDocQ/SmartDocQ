@@ -6,6 +6,7 @@ const Chat = require("../models/Chat");
 const ContactReport = require("../models/ContactReport");
 const { verifyToken, isAdmin } = require("../middlewares/auth");
 const { verifyCsrf } = require("../middlewares/csrf");
+const { deleteDocumentVectors, deleteDocumentsVectors } = require("../utils/vectorStore");
 const { validate } = require("../middlewares/validate");
 const { sendError } = require("../middlewares/apiResponse");
 const { idParamSchema } = require("../validators/adminSchemas");
@@ -507,12 +508,34 @@ router.delete("/users/:id", verifyToken, isAdmin, verifyCsrf, validate(idParamSc
       return sendError(res, 400, "Cannot delete your own account");
     }
 
-    // Find user first to attempt avatar cleanup
+    // Find user first
     const user = await User.findById(userId).select("avatar");
     if (!user) return sendError(res, 404, "User not found");
 
-    // Cascade delete user's data
-    const [docsRes, chatsRes, contactsRes, userRes] = await Promise.allSettled([
+    // Retrieve user documents before deletion
+    const documents = await Document.find({ user: userId }, { doc_id: 1, _id: 1 }).lean();
+
+    // Delete ChromaDB vectors first
+    await deleteDocumentsVectors(documents);
+
+    // Delete associated DocChunks and DocumentTables
+    const docIds = documents.map(d => d._id);
+    const docStringIds = documents.map(d => d.doc_id).filter(Boolean);
+    
+    if (docIds.length > 0) {
+      const DocChunk = require("../models/DocChunk");
+      const DocumentTable = require("../models/DocumentTable");
+      await DocChunk.deleteMany({ doc: { $in: docIds } });
+      if (docStringIds.length > 0) {
+        await DocumentTable.deleteMany({ doc_id: { $in: docStringIds } });
+      }
+    }
+
+    const UserSession = require("../models/UserSession");
+    await UserSession.deleteMany({ userId });
+
+    // Cascade delete user's data from MongoDB
+    const [docsRes, chatsRes, contactsRes, userRes] = await Promise.all([
       Document.deleteMany({ user: userId }),
       Chat.deleteMany({ user: userId }),
       ContactReport.deleteMany({ user: userId }),
@@ -522,7 +545,6 @@ router.delete("/users/:id", verifyToken, isAdmin, verifyCsrf, validate(idParamSc
     // Best-effort: remove avatar from Cloudinary
     try {
       if (user.avatar) {
-        // Attempt to derive public_id: if full URL, strip version and extension
         const url = user.avatar;
         const m = /upload\/v\d+\/([^\.]+)\./.exec(url) || /upload\/([^\.]+)\./.exec(url);
         const publicId = m ? m[1] : null;
@@ -531,10 +553,10 @@ router.delete("/users/:id", verifyToken, isAdmin, verifyCsrf, validate(idParamSc
     } catch (_) { /* ignore avatar cleanup failure */ }
 
     const deleted = {
-      documents: docsRes.status === 'fulfilled' ? (docsRes.value?.deletedCount || 0) : 0,
-      chats: chatsRes.status === 'fulfilled' ? (chatsRes.value?.deletedCount || 0) : 0,
-      contactReports: contactsRes.status === 'fulfilled' ? (contactsRes.value?.deletedCount || 0) : 0,
-      users: userRes.status === 'fulfilled' ? (userRes.value ? 1 : 0) : 0
+      documents: docsRes.deletedCount || 0,
+      chats: chatsRes.deletedCount || 0,
+      contactReports: contactsRes.deletedCount || 0,
+      users: userRes ? 1 : 0
     };
 
     res.json({ message: "User and associated data deleted successfully", deleted });
@@ -548,16 +570,34 @@ router.delete("/users/:id", verifyToken, isAdmin, verifyCsrf, validate(idParamSc
 router.delete("/documents/:id", verifyToken, isAdmin, verifyCsrf, validate(idParamSchema), async (req, res) => {
   try {
     const documentId = req.validated.params.id;
+
+    const doc = await Document.findById(documentId);
+    if (!doc) {
+      return sendError(res, 404, "Document not found");
+    }
+
+    // Delete ChromaDB vectors first
+    if (doc.doc_id) {
+      await deleteDocumentVectors(doc.doc_id);
+    }
     
     // Delete associated chats
     await Chat.deleteMany({ document: documentId });
+
+    // Delete associated DocChunks and DocumentTables
+    const DocChunk = require("../models/DocChunk");
+    await DocChunk.deleteMany({ doc: documentId });
+    if (doc.doc_id) {
+      const DocumentTable = require("../models/DocumentTable");
+      await DocumentTable.deleteMany({ doc_id: doc.doc_id });
+    }
+
+    // Delete document from MongoDB
+    await Document.deleteOne({ _id: documentId });
     
-    // Delete document
-    await Document.findByIdAndDelete(documentId);
-    
-    res.json({ message: "Document and associated chats deleted successfully" });
+    res.json({ message: "Document and associated data deleted successfully" });
   } catch (error) {
-    logger.error({ err: error }, "Delete document error");
+    logger.error({ err: error, documentId: req.params.id }, "Delete document error");
     return sendError(res, 500, "Failed to delete document");
   }
 });

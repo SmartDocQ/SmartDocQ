@@ -56,6 +56,7 @@ These can be configured through `vercel.json`.
   - TEXT_MODEL = models/gemini-2.5-flash (optional)
   - EMBED_MODEL = models/text-embedding-004 (optional)
   - CHROMA_DB_PATH = /var/data/chroma_db (recommended when using a persistent disk)
+- Network Isolation (Best Practice): For production deployments (e.g. AWS VPC, Render Private Network, Docker internal network), deploy the Flask AI service on a private internal network (VPC / internal container network), accessible only from the Node.js API gateway (or other explicitly authorized internal services). The `SERVICE_TOKEN` acts as defense-in-depth application authentication, but network-level isolation prevents direct Internet access to AI endpoints.
 - After deploy, check: GET https://<your-flask-domain>/healthz → { "status": "ok" }.
 
 ## 4) Order of operations

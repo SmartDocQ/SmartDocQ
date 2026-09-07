@@ -18,6 +18,7 @@ const logger = require("../lib/logger");
 const { verifyToken, clearAuthCookie } = require("../middlewares/auth");
 const { extractCloudinaryPublicId } = require("../utils/cloudinary");
 const { verifyCsrf } = require("../middlewares/csrf");
+const { deleteDocumentsVectors } = require("../utils/vectorStore");
 const { csrfRefreshesCounter } = require("../lib/metrics");
 const { validate } = require("../middlewares/validate");
 const { sendError, sendSuccess } = require("../middlewares/apiResponse");
@@ -322,14 +323,40 @@ router.get("/csrf", verifyToken, csrfLimiter, (req, res) => {
 // Delete current user
 router.delete("/me", verifyToken, verifyCsrf, async (req, res) => {
   try {
-    const user = await User.findByIdAndDelete(req.userId);
+    const user = await User.findById(req.userId);
     if (!user) return sendError(res, 404, "User not found");
+
+    // Retrieve all user documents before deletion
+    const documents = await Document.find({ user: user._id }, { doc_id: 1, _id: 1 }).lean();
+
+    // Delete ChromaDB vectors first
+    await deleteDocumentsVectors(documents);
+
+    // Delete DocChunks and DocumentTables for user's documents
+    const docIds = documents.map(d => d._id);
+    const docStringIds = documents.map(d => d.doc_id).filter(Boolean);
+    
+    if (docIds.length > 0) {
+      const DocChunk = require("../models/DocChunk");
+      const DocumentTable = require("../models/DocumentTable");
+      await DocChunk.deleteMany({ doc: { $in: docIds } });
+      if (docStringIds.length > 0) {
+        await DocumentTable.deleteMany({ doc_id: { $in: docStringIds } });
+      }
+    }
+
+    // Cascade delete user-related data (MongoDB Atlas)
+    const [docsRes, chatsRes, contactsRes] = await Promise.all([
+      Document.deleteMany({ user: user._id }),
+      Chat.deleteMany({ user: user._id }),
+      ContactReport.deleteMany({ user: user._id })
+    ]);
 
     // Invalidate all user sessions in DB
     await UserSession.deleteMany({ userId: user._id });
 
-    // Clear client-side cookies
-    clearAuthCookie(res);
+    // Delete user from DB
+    await User.deleteOne({ _id: user._id });
 
     // Best-effort: remove avatar from Cloudinary to free storage
     try {
@@ -337,25 +364,23 @@ router.delete("/me", verifyToken, verifyCsrf, async (req, res) => {
       if (pubId) {
         await cloudinary.uploader.destroy(pubId, { invalidate: true, resource_type: 'image' });
       }
-    } catch (_) { /* ignore */ }
+    } catch (_) { /* ignore avatar error */ }
 
-    // Cascade delete user-related data (MongoDB Atlas)
-    try {
-      const [docsRes, chatsRes, contactsRes] = await Promise.allSettled([
-        Document.deleteMany({ user: user._id }),
-        Chat.deleteMany({ user: user._id }),
-        ContactReport.deleteMany({ user: user._id })
-      ]);
-      const counts = {
-        documents: docsRes.status === 'fulfilled' ? (docsRes.value?.deletedCount || 0) : 0,
-        chats: chatsRes.status === 'fulfilled' ? (chatsRes.value?.deletedCount || 0) : 0,
-        contactReports: contactsRes.status === 'fulfilled' ? (contactsRes.value?.deletedCount || 0) : 0,
-      };
-      return sendSuccess(res, 200, { deleted: counts }, "Account deleted successfully");
-    } catch (_) {
-      // Even if cascade fails, the account was removed; report generic success
-      return sendSuccess(res, 200, {}, "Account deleted successfully");
-    }
+    // Clear client-side cookies
+    clearAuthCookie(res);
+
+    return sendSuccess(
+      res,
+      200,
+      {
+        deleted: {
+          documents: docsRes.deletedCount || 0,
+          chats: chatsRes.deletedCount || 0,
+          contactReports: contactsRes.deletedCount || 0,
+        }
+      },
+      "Account deleted successfully"
+    );
   } catch (err) {
     logger.error({ err }, "Failed to delete account");
     return sendError(res, 500, "Failed to delete account");

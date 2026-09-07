@@ -215,6 +215,7 @@ These measurements are used for diagnostics and performance tuning.
 - Applies India-focused phone number heuristics for improved detection accuracy.
 - Requires explicit user consent before processing documents containing sensitive information.
 - Internal service requests authenticated using a shared `SERVICE_TOKEN` are trusted server-to-server communications and bypass browser-oriented CSRF protections.
+- **Private Network Deployment (Recommended)**: The `SERVICE_TOKEN` provides application-layer defense-in-depth. In production environments, deploy the Flask AI service on a private internal network (VPC / internal container network), accessible only from the Node.js API gateway (or other explicitly authorized internal services).
 
 ---
 

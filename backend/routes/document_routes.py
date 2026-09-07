@@ -226,9 +226,10 @@ def delete_doc(doc_id):
     invalidate_all_bm25_versions(doc_id)
     try:
         collection.delete(where={"doc_id": doc_id})
+        return jsonify({"success": True, "doc_id": doc_id, "message": "Deleted successfully"}), 200
     except Exception as e:
-        logger.warning("Chroma deletion failed in delete_doc for %s: %s", doc_id, e)
-    return jsonify({"message": "Deleted successfully"})
+        logger.exception("Chroma deletion failed in delete_doc for %s: %s", doc_id, e)
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @document_bp.route("/api/document/consent", methods=["POST"])

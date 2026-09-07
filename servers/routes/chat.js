@@ -77,9 +77,20 @@ router.post("/:documentId/message", verifyToken, ensureActive, verifyCsrf, askLi
         body: JSON.stringify({ question: text, doc_id: doc.doc_id })
       });
       const json = await resp.json().catch(() => ({}));
-      assistantText = json.answer || json.error || "⚠️ Query failed";
+      const isProduction = process.env.NODE_ENV === "production" || process.env.DEMO_MODE === "true";
+      const devFallback = json.error || `⚠️ Error contacting assistant (${resp.status})`;
+      const prodFallback = "⚠️ Chat unavailable in demo\nAI responses aren't enabled in this deployment.";
+
+      if (!resp.ok && !json.answer) {
+        assistantText = json.answer || (isProduction ? prodFallback : devFallback);
+      } else {
+        assistantText = json.answer || json.error || (isProduction ? prodFallback : "⚠️ Query failed");
+      }
     } catch (e) {
-      assistantText = "⚠️ Error contacting assistant";
+      const isProduction = process.env.NODE_ENV === "production" || process.env.DEMO_MODE === "true";
+      assistantText = isProduction 
+        ? "⚠️ Chat unavailable in demo\nAI responses aren't enabled in this deployment."
+        : `⚠️ Error contacting assistant: ${e.message}`;
     }
     const asstMsg = { role: "assistant", text: assistantText, at: new Date(), rating: "none" };
 
