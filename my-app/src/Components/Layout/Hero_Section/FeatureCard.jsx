@@ -50,7 +50,6 @@ const FeatureCard = ({ index, title, desc, anim, reduceMotion }) => {
     <article 
       className="box" 
       ref={cardRef} 
-      role="listitem"
       onMouseMove={handleMouseMove}
     >
       <div className="glass">

@@ -81,18 +81,7 @@ SmartDocQ helps users extract insights from documents through conversational AI.
 
 ## Product
 
-Homepage:
-https://smartdocq.vercel.app/
-
-Help:
-https://smartdocq.vercel.app/help
-
-Privacy Policy:
-https://smartdocq.vercel.app/privacy
-
-Terms:
-https://smartdocq.vercel.app/terms
-
-## Company
-
-Name: SmartDocQ
+- [Homepage](https://smartdocq.vercel.app/)
+- [Help Center](https://smartdocq.vercel.app/help)
+- [Privacy Policy](https://smartdocq.vercel.app/privacy)
+- [Terms of Service](https://smartdocq.vercel.app/terms)

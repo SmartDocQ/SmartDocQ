@@ -246,10 +246,10 @@ function AppContent() {
         </div>
       )}
       <div style={{
-        opacity: shouldShowLanding ? (revealStarted ? 1 : 0) : 1,
+        opacity: 1,
         position: 'relative',
         zIndex: 1,
-        pointerEvents: shouldShowLanding ? (revealStarted ? 'auto' : 'none') : 'auto',
+        pointerEvents: 'auto',
       }}>
         <Main />
       </div>
