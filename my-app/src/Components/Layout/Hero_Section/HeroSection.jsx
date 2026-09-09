@@ -8,45 +8,8 @@ import FeatureCard from "./FeatureCard";
 import { FEATURES } from "./featuresData";
 import MobileHero from "./MobileHero";
 import { useMediaQuery } from "../../../hooks/useMediaQuery";
-import { motion } from "framer-motion";
 
 gsap.registerPlugin(ScrollTrigger);
-
-const containerVariants = {
-  hidden: {},
-  visible: {
-    transition: {
-      staggerChildren: 0.03,
-    }
-  }
-};
-
-const charVariants = {
-  hidden: { y: "100%", opacity: 0 },
-  visible: {
-    y: 0,
-    opacity: 1,
-    transition: {
-      type: "spring",
-      stiffness: 140,
-      damping: 12
-    }
-  }
-};
-
-const featureWords = [
-  { text: "Why", isAccent: false },
-  { text: "SmartDocQ", isAccent: true },
-  { text: "Stands", isAccent: false },
-  { text: "Out", isAccent: false }
-];
-
-const clarityWords = [
-  { text: "From", isAccent: false },
-  { text: "Chaos", isAccent: false },
-  { text: "To", isAccent: false },
-  { text: "Clarity", isAccent: true }
-];
 
 const HeroSection = () => {
   const isMobile = useMediaQuery("(max-width: 768px)");

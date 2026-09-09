@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { motion } from 'framer-motion';
 import SimulationSection from "./SimulationSection";
 import "./SimulationSection.css";
 
@@ -8,36 +7,6 @@ import "./SimulationSection.css";
  * ============================================================================ */
 function HowItWorksSection() {
   const [activeStep, setActiveStep] = useState(0);
-
-  // Framer Motion kinetic text variants
-  const containerVariants = {
-    hidden: {},
-    visible: {
-      transition: {
-        staggerChildren: 0.03,
-      }
-    }
-  };
-
-  const charVariants = {
-    hidden: { y: "100%", opacity: 0 },
-    visible: {
-      y: 0,
-      opacity: 1,
-      transition: {
-        type: "spring",
-        stiffness: 140,
-        damping: 12
-      }
-    }
-  };
-
-  const words = [
-    { text: "See", isAccent: false },
-    { text: "SmartDocQ", isAccent: true },
-    { text: "in", isAccent: false },
-    { text: "Action", isAccent: false }
-  ];
 
   return (
     <>
