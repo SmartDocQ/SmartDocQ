@@ -19,18 +19,18 @@ const MobileHero = () => {
 
         {/* Badge */}
         <div className="mobile-badge">
-          <span className="spark-icon">✦</span> Powered by Gemini
+          <span className="spark-icon">✦</span> AI Document Assistant
         </div>
 
         {/* Heading */}
         <h1 className="mobile-hero-heading">
-          Your Documents.<br />
-          <span className="gradient-text">Supercharged.</span>
+          Your documents.<br />
+          <span className="gradient-text">Now you can talk to them.</span>
         </h1>
 
         {/* Description */}
         <p className="mobile-hero-description">
-          Turn documents into conversations, summaries, quizzes and flashcards.
+          Upload PDFs, Word files, spreadsheets, and text. Ask questions, get grounded answers with citations, and generate instant study tools.
         </p>
 
         {/* CTA */}

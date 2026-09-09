@@ -318,6 +318,7 @@ const Chat = ({ chat, setChat, chatInput, setChatInput, sendMessage, clearChat, 
           className="chat-send"
           onClick={sendMessage}
           disabled={!chatInput.trim() || isTyping}
+          aria-label="Send message"
         >
           {isTyping ? 'Sending...' : 'Send'}
         </button>

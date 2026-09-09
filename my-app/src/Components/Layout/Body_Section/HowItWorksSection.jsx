@@ -42,35 +42,9 @@ function HowItWorksSection() {
   return (
     <>
       <div className="simple-header-wrap" style={{ marginTop: "40px", marginBottom: "20px", display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
-        <motion.h2 
-          id="howto-heading" 
-          className="premium-section-header"
-          variants={containerVariants}
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-80px" }}
-        >
-          {words.map((word, wordIdx) => (
-            <span key={wordIdx} className={`title-word ${word.isAccent ? "premium-accent-word" : ""}`}>
-              {word.text.split("").map((char, charIdx) => (
-                <motion.span
-                  key={charIdx}
-                  className="title-char"
-                  variants={charVariants}
-                  whileHover={{ 
-                    y: -6,
-                    scale: 1.08,
-                    color: word.isAccent ? undefined : "#06b6d4",
-                    transition: { type: "spring", stiffness: 450, damping: 12 }
-                  }}
-                >
-                  {char}
-                </motion.span>
-              ))}
-              <span className="title-char-space">&nbsp;</span>
-            </span>
-          ))}
-        </motion.h2>
+        <h2 id="howto-heading" className="premium-section-header">
+          See <span className="standard-accent-word">SmartDocQ</span> in Action
+        </h2>
         <div className="premium-header-line-container">
           <div className="premium-header-line" />
           <span className="sparkle-dot">✦</span>

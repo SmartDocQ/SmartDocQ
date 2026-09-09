@@ -490,7 +490,7 @@ const SimulationSection = ({ activeStep, setActiveStep }) => {
                       </svg>
                     </span>
                     <div className="chat-input-placeholder-lbl">Ask anything about this document...</div>
-                    <button className="chat-input-send-circle">
+                    <button className="chat-input-send-circle" aria-label="Send message">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                         <line x1="12" y1="19" x2="12" y2="5" />
                         <polyline points="5 12 12 5 19 12" />

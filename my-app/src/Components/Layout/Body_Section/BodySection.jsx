@@ -198,7 +198,7 @@ function DesktopBodySection() {
                   <div className="outcome-icon" aria-hidden="true" style={{ color: card.color }}>
                     {card.icon}
                   </div>
-                  <h4 className="outcome-title">{card.title}</h4>
+                  <h3 className="outcome-title">{card.title}</h3>
                 </div>
                 
                 {card.type === "files" ? (

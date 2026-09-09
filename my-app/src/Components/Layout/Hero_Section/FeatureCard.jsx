@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect } from "react";
 import Lottie from "lottie-react";
 
-const FeatureCard = ({ index, title, desc, anim, reduceMotion }) => {
+const FeatureCard = ({ index, tag, title, desc, anim, reduceMotion }) => {
   const cardRef = useRef(null);
   const [isVisible, setIsVisible] = useState(false);
 
@@ -34,22 +34,23 @@ const FeatureCard = ({ index, title, desc, anim, reduceMotion }) => {
     card.style.setProperty("--mouse-y", `${y}px`);
   };
 
-  const tags = [
-    "01 // Ingestion Engine",
-    "02 // Context Synthesis",
-    "03 // Document Summaries",
-    "04 // Practice Sandbox",
-    "05 // Chat Session Memory",
-    "06 // Alignment Loop",
-    "07 // File Workspace",
-    "08 // Data Security"
+  const defaultTags = [
+    "01 // UPLOAD",
+    "02 // ASK",
+    "03 // SUMMARIZE",
+    "04 // STUDY",
+    "05 // REMEMBER",
+    "06 // IMPROVE",
+    "07 // ORGANIZE",
+    "08 // PROTECT"
   ];
-  const currentTag = tags[index] || `0${index + 1} // Module`;
+  const cardTag = tag || defaultTags[index] || `0${index + 1} // MODULE`;
 
   return (
     <article 
       className="box" 
       ref={cardRef} 
+      role="listitem"
       onMouseMove={handleMouseMove}
     >
       <div className="glass">
@@ -57,18 +58,10 @@ const FeatureCard = ({ index, title, desc, anim, reduceMotion }) => {
         <div className="spotlight" aria-hidden="true" />
         
         {/* Monospace Metadata Tag */}
-        <div className="card-tag">{currentTag}</div>
+        <div className="card-tag">{cardTag}</div>
 
-        {/* Premium console wrapper for the Lottie graphic */}
+        {/* Product UI visual container for Lottie graphic */}
         <div className="feature-console-window" aria-hidden="true">
-          <div className="console-titlebar">
-            <div className="console-dots">
-              <span className="console-dot active" />
-              <span className="console-dot" />
-              <span className="console-dot" />
-            </div>
-            <span className="console-label">diagnostics.log</span>
-          </div>
           <div className="console-body">
             {isVisible && (
               <Lottie

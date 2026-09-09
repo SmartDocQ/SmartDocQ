@@ -5,28 +5,28 @@
     <loc>https://smartdocq.vercel.app/</loc>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
-    <lastmod>2026-03-08</lastmod>
+    <lastmod>2026-09-09</lastmod>
   </url>
 
   <url>
     <loc>https://smartdocq.vercel.app/help</loc>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
-    <lastmod>2026-03-08</lastmod>
+    <lastmod>2026-09-08</lastmod>
   </url>
 
   <url>
     <loc>https://smartdocq.vercel.app/privacy</loc>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
-    <lastmod>2026-03-08</lastmod>
+    <lastmod>2026-09-08</lastmod>
   </url>
 
   <url>
     <loc>https://smartdocq.vercel.app/terms</loc>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
-    <lastmod>2026-03-08</lastmod>
+    <lastmod>2026-09-08</lastmod>
   </url>
 
 </urlset>

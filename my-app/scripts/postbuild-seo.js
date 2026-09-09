@@ -20,8 +20,8 @@ const pages = [
     canonical: `${BASE_URL}/`,
     rootContent: `
       <main>
-        <h1>SmartDocQ – AI PDF Chat & Document Assistant</h1>
-        <p>Search, understand, and chat with your documents using AI.</p>
+        <h1>Your documents. Now you can talk to them.</h1>
+        <p>Chat with PDFs, get citation-backed answers, summarize documents, and create quizzes and flashcards. Supports PDF, Word, Excel, CSV, and TXT.</p>
         <nav aria-label="Footer Links">
           <a href="/help">Help Center</a>
           <a href="/privacy">Privacy Policy</a>
@@ -98,8 +98,8 @@ function injectSeo(html, { title, canonical, rootContent }) {
     result = result.replace('</head>', `  ${canonicalTag}\n  </head>`);
   }
 
-  // Replace empty <div id="root"></div> with minimal crawlable HTML
-  const rootElement = `<div id="root">${rootContent}</div>`;
+  // Replace empty <div id="root"></div> with minimal crawlable HTML (visually hidden to prevent pre-hydration flash)
+  const rootElement = `<div id="root"><div aria-hidden="true" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;">${rootContent}</div></div>`;
   result = result.replace(/<div id="root">\s*<\/div>/i, rootElement);
 
   return result;

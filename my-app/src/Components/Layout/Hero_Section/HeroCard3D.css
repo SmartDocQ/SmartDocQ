@@ -340,3 +340,121 @@
   letter-spacing: -0.01em;
 }
 
+/* Product-first UI card enhancements */
+.file-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.file-icon-badge {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.file-icon-badge.pdf-type {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.file-icon-badge.docx-type {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.citation-pill {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.6rem;
+  color: #06b6d4;
+  background: rgba(6, 182, 212, 0.1);
+  border: 1px solid rgba(6, 182, 212, 0.25);
+  padding: 2px 8px;
+  border-radius: 9999px;
+}
+
+.card-quick-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.action-pill {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.6rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 2px 7px;
+  border-radius: 6px;
+}
+
+.source-context-zone {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.highlighted-excerpt {
+  background: rgba(168, 85, 247, 0.04);
+  border: 1px solid rgba(168, 85, 247, 0.15);
+  border-radius: 8px;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.highlight-tag {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.58rem;
+  color: #c084fc;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.excerpt-text {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.65);
+  line-height: 1.4;
+  margin: 0;
+  font-style: italic;
+}
+
+.format-badges-zone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.format-tokens {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.fmt-token {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.64rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.fmt-token.pdf { color: #f87171; border-color: rgba(239, 68, 68, 0.3); }
+.fmt-token.docx { color: #60a5fa; border-color: rgba(59, 130, 246, 0.3); }
+.fmt-token.xlsx { color: #34d399; border-color: rgba(52, 211, 153, 0.3); }
+.fmt-token.csv { color: #fbbf24; border-color: rgba(251, 191, 36, 0.3); }
+.fmt-token.txt { color: #c084fc; border-color: rgba(192, 132, 252, 0.3); }
+
+
