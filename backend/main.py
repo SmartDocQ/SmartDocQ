@@ -34,27 +34,32 @@ app.register_blueprint(ask_bp)
 from features.table_edit import table_edit_bp
 app.register_blueprint(table_edit_bp)
 
-# ====== EXTERNAL BLUEPRINTS (quiz, flashcard, summarize) ======
+# ====== SHARED SERVICES ======
 try:
-    from features.quiz import quiz_bp, init_quiz
     from db.chroma import collection
     from indexing.indexer import has_index
     from services.retrieval_service import fetch_doc_from_node
     from utils.extraction import extract_text_for_mimetype
+    from services.document_service import DocumentService
 
-    init_quiz(collection, has_index, fetch_doc_from_node, extract_text_for_mimetype, TEXT_MODEL, genai)
+    doc_service = DocumentService(collection, has_index, fetch_doc_from_node, extract_text_for_mimetype)
+except Exception as e:
+    logger.warning("Failed to initialize DocumentService: %s", e)
+    doc_service = None
+
+# ====== EXTERNAL BLUEPRINTS (quiz, flashcard, summarize) ======
+try:
+    from features.quiz import quiz_bp, QuizGenerator, set_quiz_generator
+    quiz_gen = QuizGenerator(doc_service, TEXT_MODEL, genai)
+    set_quiz_generator(quiz_gen)
     app.register_blueprint(quiz_bp)
 except Exception as e:
     print("Quiz blueprint not loaded:", e)
 
 try:
-    from features.flashcard import flashcard_bp, init_flashcards
-    from db.chroma import collection
-    from indexing.indexer import has_index
-    from services.retrieval_service import fetch_doc_from_node
-    from utils.extraction import extract_text_for_mimetype
-
-    init_flashcards(collection, has_index, fetch_doc_from_node, extract_text_for_mimetype, TEXT_MODEL, genai)
+    from features.flashcard import flashcard_bp, FlashcardGenerator, set_flashcard_generator
+    flashcard_gen = FlashcardGenerator(doc_service, TEXT_MODEL, genai)
+    set_flashcard_generator(flashcard_gen)
     app.register_blueprint(flashcard_bp)
 except Exception as e:
     print("Flashcard blueprint not loaded:", e)

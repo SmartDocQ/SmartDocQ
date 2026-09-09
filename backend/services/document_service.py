@@ -11,6 +11,55 @@ from utils.extraction import extract_text_for_mimetype
 
 logger = logging.getLogger(__name__)
 
+
+class DocumentNotFoundError(Exception):
+    """Raised when a requested document cannot be found in Chroma index or Node storage."""
+    pass
+
+
+class DocumentService:
+    """Document service handling context loading and text extraction."""
+
+    def __init__(
+        self,
+        collection=None,
+        has_index=None,
+        fetch_doc_from_node=None,
+        extract_text_for_mimetype=None,
+    ):
+        self.collection = collection
+        self.has_index = has_index
+        self.fetch_doc_from_node = fetch_doc_from_node
+        self.extract_text_for_mimetype = extract_text_for_mimetype
+
+    def get_context(self, doc_id: str) -> str:
+        """Build context from indexed Chroma chunks if available; else fetch raw text from Node."""
+        doc_id = (doc_id or "").strip()
+        if not doc_id:
+            return ""
+
+        context = ""
+
+        # Attempt 1: Fetch indexed chunks from vector database if indexed
+        if self.has_index and callable(self.has_index) and self.has_index(doc_id):
+            if self.collection:
+                res = self.collection.get(where={"doc_id": doc_id}, include=["documents"], limit=500)
+                docs = (res or {}).get("documents") or []
+                if docs and isinstance(docs[0], list):
+                    docs = docs[0]
+                context = "\n\n".join(docs)
+
+        # Attempt 2: Fallback to fetching raw file text from Node API
+        if not context and self.fetch_doc_from_node and self.extract_text_for_mimetype:
+            ok, filename, mimetype, data_bytes = self.fetch_doc_from_node(doc_id)
+            if not ok:
+                raise DocumentNotFoundError(filename or f"Document {doc_id} not found")
+            if data_bytes:
+                context = self.extract_text_for_mimetype(filename, mimetype, data_bytes)
+
+        return (context or "").strip()
+
+
 GENERIC_TOPICS = [
     "Introduction", "Overview", "Summary", "Background", "Objectives",
     "Methodology", "Approach", "Results", "Discussion", "Conclusion",
