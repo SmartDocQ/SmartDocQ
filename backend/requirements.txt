@@ -15,4 +15,5 @@ rank-bm25>=0.2.2
 pymupdf>=1.24.0
 pymupdf4llm>=0.0.17
 tiktoken>=0.6.0
-
+groq>=0.9.0
+cerebras-cloud-sdk>=1.50.0

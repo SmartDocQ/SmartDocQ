@@ -8,15 +8,12 @@ def test_flashcard_successful_generation():
     doc_service = MagicMock(spec=DocumentService)
     doc_service.get_context.return_value = "SmartDoc is an AI document assistant supporting Flashcards, Quiz, and Summaries."
 
-    mock_model = MagicMock()
-    mock_response = MagicMock()
-    mock_response.text = '{"flashcards": [{"front": "What is SmartDoc?", "back": "An AI document assistant.", "category": "Overview", "difficulty": "Easy"}]}'
-    mock_model.generate_content.return_value = mock_response
+    mock_router = MagicMock()
+    mock_router.generate.return_value = {
+        "text": '{"flashcards": [{"front": "What is SmartDoc?", "back": "An AI document assistant.", "category": "Overview", "difficulty": "Easy"}]}'
+    }
 
-    genai_mock = MagicMock()
-    genai_mock.GenerativeModel.return_value = mock_model
-
-    generator = FlashcardGenerator(doc_service, "gemini-1.5-flash", genai_mock)
+    generator = FlashcardGenerator(doc_service, router=mock_router)
     cards = generator.generate(doc_id="doc_101", num_cards=5)
 
     assert len(cards) == 1
@@ -30,8 +27,8 @@ def test_flashcard_missing_document():
     doc_service = MagicMock(spec=DocumentService)
     doc_service.get_context.side_effect = DocumentNotFoundError("Document doc_missing not found")
 
-    genai_mock = MagicMock()
-    generator = FlashcardGenerator(doc_service, "gemini-1.5-flash", genai_mock)
+    mock_router = MagicMock()
+    generator = FlashcardGenerator(doc_service, router=mock_router)
 
     with pytest.raises(DocumentNotFoundError, match="Document doc_missing not found"):
         generator.generate(doc_id="doc_missing")
@@ -41,15 +38,15 @@ def test_flashcard_empty_document():
     doc_service = MagicMock(spec=DocumentService)
     doc_service.get_context.return_value = ""
 
-    genai_mock = MagicMock()
-    generator = FlashcardGenerator(doc_service, "gemini-1.5-flash", genai_mock)
+    mock_router = MagicMock()
+    generator = FlashcardGenerator(doc_service, router=mock_router)
 
     with pytest.raises(ValueError, match="Document has no readable text"):
         generator.generate(doc_id="doc_empty")
 
 
 def test_flashcard_normalization():
-    generator = FlashcardGenerator(MagicMock(), "gemini-1.5-flash", MagicMock())
+    generator = FlashcardGenerator(MagicMock(), router=MagicMock())
 
     # Invalid cards skipped
     assert generator._normalize_card({}) is None
@@ -78,16 +75,12 @@ def test_flashcard_deduplication():
     doc_service = MagicMock(spec=DocumentService)
     doc_service.get_context.return_value = "Sample text content for testing deduplication."
 
-    mock_model = MagicMock()
-    mock_response = MagicMock()
-    # Model returns cards with identical normalized front but different backs
-    mock_response.text = '{"flashcards": [{"front": "What is Photosynthesis?", "back": "Converts light energy."}, {"front": "what is photosynthesis?", "back": "Plants use sunlight to make food."}]}'
-    mock_model.generate_content.return_value = mock_response
+    mock_router = MagicMock()
+    mock_router.generate.return_value = {
+        "text": '{"flashcards": [{"front": "What is Photosynthesis?", "back": "Converts light energy."}, {"front": "what is photosynthesis?", "back": "Plants use sunlight to make food."}]}'
+    }
 
-    genai_mock = MagicMock()
-    genai_mock.GenerativeModel.return_value = mock_model
-
-    generator = FlashcardGenerator(doc_service, "gemini-1.5-flash", genai_mock)
+    generator = FlashcardGenerator(doc_service, router=mock_router)
     cards = generator.generate(doc_id="doc_dedup", num_cards=5)
 
     # Only the first card survives because the second card has the same normalized front
@@ -98,14 +91,13 @@ def test_flashcard_deduplication():
 def test_flashcard_num_cards_clamping():
     doc_service = MagicMock(spec=DocumentService)
     doc_service.get_context.return_value = "Content"
-    genai_mock = MagicMock()
-    generator = FlashcardGenerator(doc_service, "gemini-1.5-flash", genai_mock)
+    mock_router = MagicMock()
+    generator = FlashcardGenerator(doc_service, router=mock_router)
 
     # Mock _generate_batch to inspect clamped num_cards parameter
-    original_generate_batch = generator._generate_batch
     captured_to_generate = []
 
-    def mock_gen_batch(model, sys_instr, to_gen, existing, ctx):
+    def mock_gen_batch(sys_instr, to_gen, existing, ctx):
         captured_to_generate.append(to_gen)
         return [{"front": "Q", "back": "A"}]
 

@@ -6,7 +6,7 @@ In today's information-driven world, efficiently extracting insights from docume
 
 ## Overview
 
-SmartDocQ is a full-stack AI document intelligence platform that combines structured document processing with a Hybrid Retrieval-Augmented Generation (Hybrid RAG) architecture. By integrating semantic vector search, BM25 lexical retrieval, and Reciprocal Rank Fusion (RRF), it delivers accurate, context-aware answers across both narrative documents and structured tabular data.
+SmartDocQ is a full-stack AI document intelligence platform that combines structured document processing with a Hybrid Retrieval-Augmented Generation (Hybrid RAG) architecture. By integrating semantic vector search, BM25 lexical retrieval, and Reciprocal Rank Fusion (RRF), it delivers accurate, context-aware answers across both narrative documents and structured tabular data. The platform uses a model-agnostic LLM routing layer that decouples application features from individual AI providers and supports task-aware provider selection with automatic fallback.
 
 ## Features
 
@@ -88,6 +88,7 @@ graph TD
         ShadowVersionManager["Shadow Version Manager<br/>(CAS Activation & Rollbacks)"]:::aiservice
         RetrievalPipeline["Hybrid Retrieval Engine<br/>(Vector Search + BM25 + RRF)"]:::aiservice
         Sanitizer["Prompt Injection Sanitizer<br/>(sanitize_context)"]:::aiservice
+        LLMRouter["LLM Router<br/>(Task-aware Routing)<br/>(Provider Fallback)<br/>(Model Fallback)<br/>(Timeout Budgeting)"]:::aiservice
     end
 
     %% Storage Layer
@@ -99,7 +100,7 @@ graph TD
 
     %% External
     subgraph External_APIs ["External API Layer"]
-        GeminiAPI["Google Gemini API<br/>(gemini-2.5-flash & gemini-embedding-2)"]:::external
+        LLM_APIs["Multi-Provider LLM APIs<br/>(Gemini / Groq / Cerebras)"]:::external
     end
 
     %% Flow/Connections
@@ -124,7 +125,8 @@ graph TD
     FlaskApp <-->|"Vector query / write"| ChromaDB
     RetrievalPipeline <-->|"Lexical query"| BM25Cache
     
-    FlaskApp <-->|"HTTPS / REST"| GeminiAPI
+    FlaskApp --> LLMRouter
+    LLMRouter <-->|"HTTPS / REST"| LLM_APIs
 ```
 
 ---
@@ -151,7 +153,10 @@ graph TD
 
 ### AI Service
 - **Flask 3.x**: Python web framework for AI processing
-- **Google Gemini 2.5 Flash**: Advanced text generation and comprehension
+- **LLM Router**: Model-agnostic task-aware routing with provider-level and model-level fallback, normalized responses, error classification, and a shared latency budget.
+- **Gemini 2.5 Flash**: Primary provider for document-grounded QA and summarization.
+- **Groq GPT-OSS 120B**: Primary provider for general QA, quizzes, flashcards, and conversation.
+- **Cerebras Llama 3.3 70B**: Resilience fallback provider.
 - **models/gemini-embedding-2**: High-quality vector embeddings
 - **ChromaDB 0.5+**: Vector storage
 - **BM25 Lexical Index**: Exact-match retrieval
@@ -267,7 +272,7 @@ To set up SmartDocQ locally, you'll need:
 - **Node.js**: Version 20.x or higher
 - **Python**: Version 3.9 or higher
 - **MongoDB**: Local installation or MongoDB Atlas account
-- **Google AI API Key**: For Gemini AI access
+- **AI Provider API Keys**: Gemini, Groq, and Cerebras API credentials for LLM generation
 - **Git**: Version control
 
 ---
@@ -321,6 +326,8 @@ pip install -r requirements.txt
 # NODE_BASE_URL=http://localhost:5000
 # SERVICE_TOKEN=shared_strong_secret (must be identical to the SERVICE_TOKEN in servers/.env)
 # GEMINI_API_KEY=your_google_ai_api_key
+# GROQ_API_KEY=your_groq_api_key
+# CEREBRAS_API_KEY=your_cerebras_api_key
 # INDEX_BATCH_SIZE=64
 # MAX_UPLOAD_SIZE_MB=15
 
@@ -369,6 +376,8 @@ Captured metrics include:
 - BM25 latency
 - RRF fusion latency
 - LLM latency
+- LLM provider/model selection
+- fallback activation and fallback reason
 - total request latency
 
 Additional backend metrics include:

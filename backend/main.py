@@ -3,7 +3,6 @@ load_dotenv()
 
 import os
 import logging
-from services.gemini_client import genai, TEXT_MODEL
 from flask import Flask, jsonify
 from flask_cors import CORS
 from werkzeug.exceptions import HTTPException
@@ -49,24 +48,22 @@ except Exception as e:
 
 # ====== EXTERNAL BLUEPRINTS (quiz, flashcard, summarize) ======
 try:
-    from features.quiz import quiz_bp, QuizGenerator, set_quiz_generator
-    quiz_gen = QuizGenerator(doc_service, TEXT_MODEL, genai)
-    set_quiz_generator(quiz_gen)
+    from features.quiz import quiz_bp, QuizGenerator
+    app.extensions["quiz_generator"] = QuizGenerator(doc_service)
     app.register_blueprint(quiz_bp)
 except Exception as e:
     print("Quiz blueprint not loaded:", e)
 
 try:
-    from features.flashcard import flashcard_bp, FlashcardGenerator, set_flashcard_generator
-    flashcard_gen = FlashcardGenerator(doc_service, TEXT_MODEL, genai)
-    set_flashcard_generator(flashcard_gen)
+    from features.flashcard import flashcard_bp, FlashcardGenerator
+    app.extensions["flashcard_generator"] = FlashcardGenerator(doc_service)
     app.register_blueprint(flashcard_bp)
 except Exception as e:
     print("Flashcard blueprint not loaded:", e)
 
 try:
     from features.summarize import summarize_bp, TextSummarizer
-    app.extensions["text_summarizer"] = TextSummarizer(TEXT_MODEL, genai)
+    app.extensions["text_summarizer"] = TextSummarizer()
     app.register_blueprint(summarize_bp)
 except Exception as e:
     print("Summarize blueprint not loaded:", e)

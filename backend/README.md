@@ -9,7 +9,12 @@ Copy `.env.example` to `.env` and configure:
 - `NODE_BASE_URL` — Base URL of the trusted Node.js API used for authenticated document downloads, metadata access, and indexing callbacks.
 - `SERVICE_TOKEN` — Shared secret used to authenticate all server-to-server communication between the Node.js backend and the Flask AI service. This value must be identical in both services.
 - `GEMINI_API_KEY` — Google Generative AI API key
+- `GROQ_API_KEY` — Groq API key
+- `CEREBRAS_API_KEY` — Cerebras API key
 - `TEXT_MODEL` — Optional override for the Gemini text model (default: `models/gemini-2.5-flash`)
+- `GROQ_MODEL` — Groq primary model (default: `openai/gpt-oss-120b`)
+- `CEREBRAS_PRIMARY_MODEL` — Cerebras primary model (default: `llama-3.3-70b`)
+- `CEREBRAS_FALLBACK_MODEL` — Cerebras fallback model (default: `llama3.1-8b`)
 - `EMBED_MODEL` — Optional override for the embedding model (default: `models/gemini-embedding-2`)
 - `INDEX_BATCH_SIZE` — Optional batch size for Chroma chunk upserts (default: `64`)
 - `JAILBREAK_THRESHOLD` — Optional weighted threshold for jailbreak detection (default: `3`)
@@ -38,6 +43,9 @@ The service runs on port `5001` by default.
 - **tiktoken**: Fast byte pair encoding (BPE) tokenizer used for chunk bounds estimation.
 - **rank-bm25**: Lexical BM25 indexing and querying (wrapped in version-isolated cache with automatic TTL invalidation).
 - **ChromaDB**: High-performance semantic vector database.
+- **groq**: Groq Cloud Python SDK for LLM generation.
+- **cerebras-cloud-sdk**: Cerebras Cloud Python SDK for LLM generation.
+- **google-generativeai**: Google Gemini SDK.
 
 ## Health Check
 
@@ -46,11 +54,62 @@ The service runs on port `5001` by default.
 - `GET /` → `{ "service": "SmartDocQ Flask", "status": "ok" }`
   - **Public endpoint**. Does not require `SERVICE_TOKEN`.
 
+---
 
+## MODEL-AGNOSTIC LLM ARCHITECTURE
+
+SmartDocQ uses a model-agnostic LLM routing architecture that decouples application features from specific LLM providers and models.
+
+Feature services (`TextSummarizer`, `QuizGenerator`, `FlashcardGenerator`, QA endpoint) do not directly depend on Gemini, Groq, or Cerebras SDKs. They request text generation through a centralized LLM Router using a logical task parameter such as `qa`, `general_qa`, `summarization`, `quiz`, `flashcards`, or `conversation`.
+
+```mermaid
+graph TD
+    Feature["Feature Service<br/>(Summarize / Quiz / Flashcard / QA)"] --> Router["LLM Router"]
+    Router --> Policy["Task Policy"]
+    Policy --> Provider["Provider / Model"]
+    Provider --> Gen["Generation"]
+```
+
+### Key Architectural Concepts
+- **Task-aware Routing**: Each logical task resolves to a prioritized provider chain optimized for its specific latency and quality requirements.
+- **Provider Fallback**: If the primary provider fails due to a retryable error (rate limits, timeouts, server errors), the router transparently fails over to the next provider in the chain.
+- **Model-level Fallback**: Cerebras retries with its configured fallback model before the router proceeds to the next provider.
+- **Error Classification**: Distinguishes retryable errors (429 Rate Limit, 5xx Server Errors, Timeouts, Network issues) from non-retryable errors (401 Authentication, 400 Bad Request) to prevent wasteful retries.
+- **Normalized Router Response**: Returns the provider, model, fallback usage flag, and fallback reason in a consistent response structure for logging and observability.
+- **Shared Global Latency Deadline**: Manages floating-point timeout allocation across provider attempts without resetting attempt timeouts.
+
+### LLM Routing Policy
+
+```mermaid
+graph TD
+    Router["LLM Router<br/>(Task-aware routing)"]
+    Router --> Gemini["Gemini<br/>(Gemini 2.5 Flash)"]
+    Router --> Groq["Groq<br/>(GPT-OSS 120B)<br/>↓ fallback<br/>(GPT-OSS 20B)"]
+    Router --> Cerebras["Cerebras<br/>(Llama 3.3 70B)<br/>↓ fallback<br/>(Llama 3.1 8B)"]
+```
+
+- `qa` $\rightarrow$ Gemini $\rightarrow$ Groq $\rightarrow$ Cerebras
+- `general_qa` $\rightarrow$ Groq $\rightarrow$ Gemini $\rightarrow$ Cerebras
+- `summarization` $\rightarrow$ Gemini $\rightarrow$ Groq $\rightarrow$ Cerebras
+- `quiz` $\rightarrow$ Groq $\rightarrow$ Gemini $\rightarrow$ Cerebras
+- `flashcards` $\rightarrow$ Groq $\rightarrow$ Gemini $\rightarrow$ Cerebras
+- `conversation` $\rightarrow$ Groq $\rightarrow$ Gemini $\rightarrow$ Cerebras
+
+### LLM Latency Budget
+
+The LLM router enforces a shared global wall-clock deadline:
+
+- **Primary attempt**: up to 10 seconds
+- **Fallback attempt**: up to 10 seconds
+- **Total LLM budget**: maximum 15 seconds
+
+Fallback attempts do not receive a fresh 15-second budget. Each attempt receives only the remaining time within the global deadline.
+
+---
 
 ## RESILIENT PDF EXTRACTION
 
-PDF processing is critical to a document RAG system. SmartDocQ implements a robust **Three-tier PDF Extraction Chain** to ensure processing never fails entirely:
+PDF processing is critical to a document RAG system. SmartDocQ implements a **Three-tier PDF Extraction Chain** to ensure processing never fails entirely:
 
 1. **Tier 1: PyMuPDF4LLM** (Default) — Extracts text and tables, converting them to rich Markdown structured page-by-page.
 2. **Tier 2: PyMuPDF Classic** (Fallback 1) — Used if Tier 1 conversions encounter layout errors, converting raw text page-by-page.
@@ -92,7 +151,6 @@ graph TD
 - **Automatic Version Validation**: enforces Vector index compatibility checks.
 - **Dual Spreadsheet Representations**: spreadsheets are indexed both as structured table chunks and narrative paragraph chunks to improve retrieval quality.
 
-
 ---
 
 ## HYBRID RETRIEVAL WORKFLOW
@@ -133,7 +191,8 @@ graph TD
     subgraph Generation_Subsystem ["Generation Subsystem"]
         direction TB
         Context["Top Chunks Context"]:::process
-        Gemini["Gemini 2.5 Flash<br/>(Contextual Answer Generation)"]:::output
+        Router["LLM Router<br/>(Task-aware Provider Selection)"]:::process
+        Providers["Gemini / Groq / Cerebras<br/>(Fallback if retryable failure)"]:::output
     end
 
     %% Flow Connections
@@ -150,7 +209,8 @@ graph TD
     RRF --> Refine
     Refine --> TableBoost
     TableBoost --> Context
-    Context --> Gemini
+    Context --> Router
+    Router --> Providers
 ```
 
 ### Contextual Chunk Headers
@@ -238,6 +298,9 @@ python -m pytest
 Or run specific test modules in verbose mode:
 
 ```bash
+# Run LLM router unit tests (task validation, error classification, provider/model fallbacks, timeouts)
+python -m pytest tests/test_llm_router.py -v
+
 # Run chunking unit tests (blocks, tables, code splitting, overlap)
 python -m pytest tests/test_chunking.py -v
 
@@ -250,13 +313,13 @@ python -m pytest tests/test_retrieval_service.py -v
 # Run DocumentService unit tests (context retrieval, multi-format parsing)
 python -m pytest tests/test_document_service.py -v
 
-# Run QuizGenerator unit tests (single-pass JSON quiz generation)
+# Run QuizGenerator unit tests (single-pass JSON quiz generation via router mock)
 python -m pytest tests/test_quiz_generator.py -v
 
-# Run FlashcardGenerator unit tests (normalized deduplicated flashcards)
+# Run FlashcardGenerator unit tests (normalized deduplicated flashcards via router mock)
 python -m pytest tests/test_flashcard_generator.py -v
 
-# Run TextSummarizer unit tests (two-stage chunk bounds, style/boolean validation)
+# Run TextSummarizer unit tests (two-stage chunk bounds, style/boolean validation via router mock)
 python -m pytest tests/test_summarizer.py -v
 
 # Run TableEditor unit tests (incremental cell sync, O(1) BM25 lookup maps)
@@ -272,18 +335,32 @@ python -m pytest tests/test_vector_versioning.py -v
 python -m pytest tests/test_embedding_service.py -v
 ```
 
+### Coverage Highlights (LLM Router Tests)
+The LLM router test suite covers:
+- task validation
+- provider selection
+- retryable/non-retryable error classification
+- provider-level fallback
+- Cerebras model-level fallback
+- JSON response configuration
+- timeout budget preservation
+- authentication failure handling
+
 ---
 
 ## INDEXING & CORE SERVICES ARCHITECTURE
 
+- `llm_router.py` — Centralized task-aware multi-provider LLM routing, fallback handling, error classification, timeout budgeting, and normalized generation responses
+- `gemini_client.py` — Gemini SDK/client configuration and provider-specific setup
+- `embedding_service.py` — Gemini embedding generation; kept separate from LLM generation routing
 - `indexer.py` — Main indexing orchestration and lifecycle management
 - `pipeline.py` — Structured extraction, embedding preparation, and shadow index construction
 - `chunking.py` — Markdown normalization, parsing, section detection, and token-aware chunking
 - `document_service.py` — `DocumentService` for context retrieval and multi-format text parsing
 - `background.py` — Background indexing scheduler and recovery workflow
-- `features/quiz.py` — `QuizGenerator` service for single-pass document quiz generation
-- `features/flashcard.py` — `FlashcardGenerator` service with normalized front deduplication
-- `features/summarize.py` — `TextSummarizer` Map-Reduce service with guaranteed chunk bounds ($\le 1600$ chars) and strict HTTP input validation
+- `features/quiz.py` — `QuizGenerator` service for single-pass document quiz generation via LLM router
+- `features/flashcard.py` — `FlashcardGenerator` service with normalized front deduplication via LLM router
+- `features/summarize.py` — `TextSummarizer` Map-Reduce service with guaranteed chunk bounds ($\le 1600$ chars) via LLM router
 - `features/table_edit.py` — `TableEditor` incremental cell synchronization service with $O(1)$ BM25 cache lookup maps
 
 ---

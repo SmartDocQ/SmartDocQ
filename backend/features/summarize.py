@@ -114,28 +114,30 @@ Selection:
 Summary:
 """
 
-class TextSummarizer:
-    """Service handling text summarization using Gemini Map-Reduce."""
+from services.llm_router import router as default_router
 
-    def __init__(self, text_model: str, genai_module):
-        self.text_model = text_model
-        self.genai = genai_module
+class TextSummarizer:
+    """Service handling text summarization via LLM router."""
+
+    def __init__(self, router=None):
+        self.router = router or default_router
 
     def summarize(self, selection_text: str, style: str = "concise", bullets: bool = True) -> str:
         cleaned = _clean_selection_text(selection_text)
         if not cleaned:
             raise ValueError("Missing selectionText")
 
-        model = self.genai.GenerativeModel(self.text_model)
         chunks = _chunk_text(cleaned)
         if len(chunks) <= 1:
-            resp = model.generate_content(_build_prompt(cleaned, style, bullets), request_options={"timeout": 30})
-            return (getattr(resp, "text", "") or "").strip()
+            prompt = _build_prompt(cleaned, style, bullets)
+            res = self.router.generate(task="summarization", prompt=prompt)
+            return (res.get("text", "") or "").strip()
 
         partials = []
         for ch in chunks:
-            r = model.generate_content(_build_prompt(ch, style, bullets), request_options={"timeout": 30})
-            partials.append((getattr(r, "text", "") or "").strip())
+            prompt = _build_prompt(ch, style, bullets)
+            res = self.router.generate(task="summarization", prompt=prompt)
+            partials.append((res.get("text", "") or "").strip())
 
         combined = "\n\n".join(p for p in partials if p)
         reduce_prompt = f"""
@@ -149,8 +151,8 @@ Partials:
 
 Final summary:
 """
-        final = model.generate_content(reduce_prompt, request_options={"timeout": 30})
-        return (getattr(final, "text", "") or "").strip()
+        res = self.router.generate(task="summarization", prompt=reduce_prompt)
+        return (res.get("text", "") or "").strip()
 
 
 @summarize_bp.route("/api/summarize", methods=["POST", "OPTIONS"])

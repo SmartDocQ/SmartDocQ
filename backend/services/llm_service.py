@@ -4,7 +4,7 @@ NOT responsible for: retrieval, ranking, topic suggestion, or state management.
 """
 import re
 
-from services.gemini_client import genai, TEXT_MODEL
+from services.llm_router import generate as router_generate
 
 # Patterns commonly used in prompt injection attempts.
 _SUSPICIOUS_PATTERNS: list[str] = [
@@ -33,9 +33,6 @@ def sanitize_context(context: str, max_chars: int = 12000) -> str:
         text = text[:max_chars]
 
     return text
-
-def _create_model():
-    return genai.GenerativeModel(TEXT_MODEL)
 
 def generate_answer_from_context(question: str, context: str) -> str | None:
     """Generate a document-grounded answer using only the supplied context.
@@ -70,11 +67,12 @@ Question: {question}
 
 Answer strictly from the context:
 """
-    model = _create_model()
-    response = model.generate_content(prompt, request_options={"timeout": 30})
-    if response and response.text:
-        return response.text.strip()
-    return None
+    try:
+        res = router_generate(task="qa", prompt=prompt)
+        return res.get("text")
+    except Exception as e:
+        print("Document QA generation error:", e)
+        return None
 
 def generate_general_answer(question: str) -> str | None:
     """Generate a general-knowledge answer when no document context is available."""
@@ -82,12 +80,9 @@ def generate_general_answer(question: str) -> str | None:
 
 Question: {question}
 """
-    model = _create_model()
     try:
-        response = model.generate_content(prompt)
-        if response and response.text:
-            return response.text.strip()
-        return None
+        res = router_generate(task="general_qa", prompt=prompt)
+        return res.get("text")
     except Exception as e:
         print("General fallback error:", e)
         return None

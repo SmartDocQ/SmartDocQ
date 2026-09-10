@@ -87,67 +87,52 @@ def test_chunk_text_invariant_across_configurations():
 
 
 def test_summarizer_single_chunk():
-    mock_model = MagicMock()
-    mock_response = MagicMock()
-    mock_response.text = "This is a concise summary of the document."
-    mock_model.generate_content.return_value = mock_response
+    mock_router = MagicMock()
+    mock_router.generate.return_value = {"text": "This is a concise summary of the document."}
 
-    genai_mock = MagicMock()
-    genai_mock.GenerativeModel.return_value = mock_model
-
-    summarizer = TextSummarizer("gemini-1.5-flash", genai_mock)
+    summarizer = TextSummarizer(router=mock_router)
     summary = summarizer.summarize("Short sample text to summarize.", style="concise", bullets=True)
 
     assert summary == "This is a concise summary of the document."
-    assert mock_model.generate_content.call_count == 1
+    assert mock_router.generate.call_count == 1
 
 
 def test_summarizer_empty_text():
-    genai_mock = MagicMock()
-    summarizer = TextSummarizer("gemini-1.5-flash", genai_mock)
+    mock_router = MagicMock()
+    summarizer = TextSummarizer(router=mock_router)
 
     with pytest.raises(ValueError, match="Missing selectionText"):
         summarizer.summarize("   ")
 
 
 def test_summarizer_map_reduce():
-    mock_model = MagicMock()
+    mock_router = MagicMock()
 
-    def side_effect(prompt, **kwargs):
-        resp = MagicMock()
+    def side_effect(task, prompt, **kwargs):
         if "You are aggregating multiple partial summaries" in prompt:
-            resp.text = "Final merged summary."
+            return {"text": "Final merged summary."}
         else:
-            resp.text = "Partial chunk summary."
-        return resp
+            return {"text": "Partial chunk summary."}
 
-    mock_model.generate_content.side_effect = side_effect
+    mock_router.generate.side_effect = side_effect
 
-    genai_mock = MagicMock()
-    genai_mock.GenerativeModel.return_value = mock_model
-
-    summarizer = TextSummarizer("gemini-1.5-flash", genai_mock)
+    summarizer = TextSummarizer(router=mock_router)
 
     long_text = ("Section header.\n\n" + "Word " * 250 + "\n\n") * 4
     summary = summarizer.summarize(long_text, style="detailed", bullets=False)
 
     assert summary == "Final merged summary."
-    assert mock_model.generate_content.call_count >= 3
+    assert mock_router.generate.call_count >= 3
 
 
 @pytest.fixture
 def test_app():
-    mock_model = MagicMock()
-    mock_response = MagicMock()
-    mock_response.text = "Endpoint generated summary."
-    mock_model.generate_content.return_value = mock_response
-
-    genai_mock = MagicMock()
-    genai_mock.GenerativeModel.return_value = mock_model
+    mock_router = MagicMock()
+    mock_router.generate.return_value = {"text": "Endpoint generated summary."}
 
     app = Flask(__name__)
     app.register_blueprint(summarize_bp)
-    app.extensions["text_summarizer"] = TextSummarizer("gemini-1.5-flash", genai_mock)
+    app.extensions["text_summarizer"] = TextSummarizer(router=mock_router)
     return app
 
 

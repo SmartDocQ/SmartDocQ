@@ -40,6 +40,8 @@ ALLOWED_ORIGINS = build_allowed_origins(FRONTEND_ORIGINS)
 
 # ====== API / SERVICE CONFIG ======
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+CEREBRAS_API_KEY = os.environ.get("CEREBRAS_API_KEY", "")
 NODE_BASE_URL = os.environ.get("NODE_BASE_URL", "http://localhost:5000")
 SERVICE_TOKEN = os.environ.get("SERVICE_TOKEN")
 if not SERVICE_TOKEN:
@@ -49,7 +51,16 @@ CHUNK_UPSERT_URL = os.environ.get("CHUNK_UPSERT_URL", f"{NODE_BASE_URL}/api/sear
 
 # ====== MODEL CONFIG ======
 TEXT_MODEL = os.environ.get("TEXT_MODEL", "models/gemini-2.5-flash")
+GROQ_MODEL = "openai/gpt-oss-120b"
+CEREBRAS_PRIMARY_MODEL = "llama-3.3-70b"
+CEREBRAS_FALLBACK_MODEL = "llama3.1-8b"
+CEREBRAS_MODELS = (CEREBRAS_PRIMARY_MODEL, CEREBRAS_FALLBACK_MODEL)
 EMBED_MODEL = os.environ.get("EMBED_MODEL", "models/gemini-embedding-2")
+
+# ====== LLM ROUTING LATENCY BUDGET ======
+LLM_PRIMARY_TIMEOUT = int(os.environ.get("LLM_PRIMARY_TIMEOUT", "10"))
+LLM_FALLBACK_TIMEOUT = int(os.environ.get("LLM_FALLBACK_TIMEOUT", "10"))
+LLM_TOTAL_TIMEOUT = int(os.environ.get("LLM_TOTAL_TIMEOUT", "15"))
 
 # ====== INDEXING / PIPELINE VERSIONING ======
 # Bump this when you make changes that should force reindexing even if the

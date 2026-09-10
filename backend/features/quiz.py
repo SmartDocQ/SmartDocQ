@@ -1,22 +1,19 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 import re as _re
 import time as _time
 import json
 import logging
 from services.document_service import DocumentNotFoundError
+from services.llm_router import router as default_router
 
 logger = logging.getLogger(__name__)
 
-# Module-level generator instance configured by main.py
-quiz_generator = None
-
 class QuizGenerator:
-    """Service handling document quiz generation using Gemini and DocumentService."""
+    """Service handling quiz generation via LLM router."""
 
-    def __init__(self, document_service, text_model, genai_module):
+    def __init__(self, document_service, router=None):
         self.document_service = document_service
-        self.text_model = text_model
-        self.genai = genai_module
+        self.router = router or default_router
 
     def _build_system_instruction(self) -> str:
         return (
@@ -59,45 +56,6 @@ class QuizGenerator:
             + context[:12000]
         )
 
-    def _create_model(self):
-        return self.genai.GenerativeModel(
-            self.text_model,
-            generation_config={
-                "response_mime_type": "application/json",
-                "temperature": 0.4,
-                "max_output_tokens": 1536,
-            },
-        )
-
-    def _is_transient_llm_error(self, err: Exception) -> bool:
-        msg = str(err or "")
-        needles = [
-            "504",
-            "Deadline Exceeded",
-            "503",
-            "Service Unavailable",
-            "429",
-            "RESOURCE_EXHAUSTED",
-            "Rate limit",
-            "rate limit",
-            "ECONNRESET",
-            "ETIMEDOUT",
-            "timeout",
-        ]
-        return any(n in msg for n in needles)
-
-    def _generate_content_with_retry(self, model, parts, timeouts=(30, 45, 60)):
-        last_err = None
-        for i, t in enumerate(timeouts):
-            try:
-                return model.generate_content(parts, request_options={"timeout": int(t)})
-            except Exception as e:
-                last_err = e
-                if i >= len(timeouts) - 1 or not self._is_transient_llm_error(e):
-                    raise
-                _time.sleep(0.4 * (i + 1))
-        raise last_err
-
     def _parse_json_safely(self, text: str):
         if not text:
             return None
@@ -124,7 +82,6 @@ class QuizGenerator:
 
     def _generate_batch(
         self,
-        model,
         system_instruction: str,
         difficulty: str,
         qtypes: list[str],
@@ -132,14 +89,18 @@ class QuizGenerator:
         to_generate: int,
         existing_questions: list[str],
     ) -> list:
-        prompt = self._build_user_instruction(
+        user_instruction = self._build_user_instruction(
             difficulty, qtypes, context, to_generate, existing_questions
         )
-        response = self._generate_content_with_retry(
-            model, [system_instruction, prompt]
+        prompt = f"{system_instruction}\n\n{user_instruction}"
+        res = self.router.generate(
+            task="quiz",
+            prompt=prompt,
+            response_json=True,
+            temperature=0.4,
+            max_tokens=1536,
         )
-
-        raw = (getattr(response, "text", "") or "").strip()
+        raw = (res.get("text", "") or "").strip()
         data = self._parse_json_safely(raw)
 
         if not isinstance(data, dict):
@@ -236,7 +197,6 @@ class QuizGenerator:
             raise ValueError("Document has no readable text")
 
         system_instruction = self._build_system_instruction()
-        model = self._create_model()
 
         qs = []
         seen_questions = set()
@@ -247,7 +207,6 @@ class QuizGenerator:
             attempts -= 1
             existing_questions = [q["question"] for q in qs]
             batch = self._generate_batch(
-                model,
                 system_instruction,
                 difficulty,
                 qtypes,
@@ -278,12 +237,6 @@ class QuizGenerator:
 
         return qs
 
-def set_quiz_generator(generator: QuizGenerator):
-    """Set the QuizGenerator instance for the blueprint."""
-    global quiz_generator
-    quiz_generator = generator
-
-
 quiz_bp = Blueprint("quiz", __name__)
 
 @quiz_bp.route("/api/document/generate-quiz", methods=["POST", "GET", "OPTIONS"])
@@ -292,6 +245,7 @@ def generate_quiz():
     if request.method == "OPTIONS":
         return ("", 204)
 
+    quiz_generator = current_app.extensions.get("quiz_generator")
     if quiz_generator is None:
         return jsonify({"success": False, "error": "Quiz service not initialized"}), 500
 

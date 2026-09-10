@@ -1,22 +1,18 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 import re as _re
 import json
 import logging
 from services.document_service import DocumentNotFoundError
+from services.llm_router import router as default_router
 
 logger = logging.getLogger(__name__)
 
-# Module-level generator instance configured by main.py
-flashcard_generator = None
-
-
 class FlashcardGenerator:
-    """Service handling document flashcard generation using Gemini and DocumentService."""
+    """Service handling flashcard generation via LLM router."""
 
-    def __init__(self, document_service, text_model, genai_module):
+    def __init__(self, document_service, router=None):
         self.document_service = document_service
-        self.text_model = text_model
-        self.genai = genai_module
+        self.router = router or default_router
 
     def _build_system_instruction(self) -> str:
         return (
@@ -57,16 +53,6 @@ class FlashcardGenerator:
             + context[:12000]
         )
 
-    def _create_model(self):
-        return self.genai.GenerativeModel(
-            self.text_model,
-            generation_config={
-                "response_mime_type": "application/json",
-                "temperature": 0.4,
-                "max_output_tokens": 2048,
-            },
-        )
-
     def _parse_json_safely(self, text: str):
         if not text:
             return None
@@ -91,22 +77,21 @@ class FlashcardGenerator:
 
         return None
 
-    def _normalize_card(self, c: dict) -> dict | None:
-        if not isinstance(c, dict):
+    def _normalize_card(self, raw: dict) -> dict | None:
+        if not isinstance(raw, dict):
             return None
-
-        front = str(c.get("front", "")).strip()
-        back = str(c.get("back", "")).strip()
+        front = str(raw.get("front", "")).strip()
+        back = str(raw.get("back", "")).strip()
         if not front or not back:
             return None
-
+        
         if len(front) > 200:
             front = front[:200].rstrip() + "…"
         if len(back) > 600:
             back = back[:600].rstrip() + "…"
 
-        category = str(c.get("category", "General")).strip() or "General"
-        diff = str(c.get("difficulty", "Medium")).strip().capitalize()
+        category = str(raw.get("category", "") or "General").strip()
+        diff = str(raw.get("difficulty", "") or "Medium").strip().capitalize()
         if diff not in ("Easy", "Medium", "Hard"):
             diff = "Medium"
 
@@ -119,18 +104,21 @@ class FlashcardGenerator:
 
     def _generate_batch(
         self,
-        model,
         system_instruction: str,
         to_generate: int,
         existing_fronts: list[str],
         context: str,
     ) -> list:
-        prompt = self._build_user_instruction(to_generate, existing_fronts, context)
-        response = model.generate_content(
-            [system_instruction, prompt], request_options={"timeout": 30}
+        user_instruction = self._build_user_instruction(to_generate, existing_fronts, context)
+        prompt = f"{system_instruction}\n\n{user_instruction}"
+        res = self.router.generate(
+            task="flashcards",
+            prompt=prompt,
+            response_json=True,
+            temperature=0.4,
+            max_tokens=2048,
         )
-
-        raw = (getattr(response, "text", "") or "").strip()
+        raw = (res.get("text", "") or "").strip()
         data = self._parse_json_safely(raw)
 
         if not isinstance(data, dict):
@@ -166,7 +154,6 @@ class FlashcardGenerator:
             raise ValueError("Document has no readable text")
 
         system_instruction = self._build_system_instruction()
-        model = self._create_model()
 
         final_cards = []
         seen_pairs = set()
@@ -178,7 +165,6 @@ class FlashcardGenerator:
             attempts -= 1
             existing_fronts = [c["front"] for c in final_cards]
             batch = self._generate_batch(
-                model,
                 system_instruction,
                 min(remaining, 15),
                 existing_fronts,
@@ -209,12 +195,6 @@ class FlashcardGenerator:
         return final_cards[:num_cards]
 
 
-def set_flashcard_generator(generator: FlashcardGenerator):
-    """Set the FlashcardGenerator instance for the blueprint."""
-    global flashcard_generator
-    flashcard_generator = generator
-
-
 flashcard_bp = Blueprint("flashcard", __name__)
 
 
@@ -224,6 +204,7 @@ def generate_flashcards():
     if request.method == "OPTIONS":
         return ("", 204)
 
+    flashcard_generator = current_app.extensions.get("flashcard_generator")
     if flashcard_generator is None:
         return jsonify({"success": False, "error": "Flashcard service not initialized"}), 500
 
