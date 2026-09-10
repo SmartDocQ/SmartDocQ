@@ -6,7 +6,6 @@ import re
 
 from services.gemini_client import genai, TEXT_MODEL
 
-
 # Patterns commonly used in prompt injection attempts.
 _SUSPICIOUS_PATTERNS: list[str] = [
     r"ignore\s+(all\s+)?previous\s+instructions?",
@@ -18,7 +17,6 @@ _SUSPICIOUS_PATTERNS: list[str] = [
     r"print\s+the\s+prompt",
     r"jailbreak",
 ]
-
 
 def sanitize_context(context: str, max_chars: int = 12000) -> str:
     """Treat document text as untrusted input.
@@ -36,6 +34,8 @@ def sanitize_context(context: str, max_chars: int = 12000) -> str:
 
     return text
 
+def _create_model():
+    return genai.GenerativeModel(TEXT_MODEL)
 
 def generate_answer_from_context(question: str, context: str) -> str | None:
     """Generate a document-grounded answer using only the supplied context.
@@ -70,12 +70,11 @@ Question: {question}
 
 Answer strictly from the context:
 """
-    model = genai.GenerativeModel(TEXT_MODEL)
+    model = _create_model()
     response = model.generate_content(prompt, request_options={"timeout": 30})
     if response and response.text:
         return response.text.strip()
     return None
-
 
 def generate_general_answer(question: str) -> str | None:
     """Generate a general-knowledge answer when no document context is available."""
@@ -83,7 +82,7 @@ def generate_general_answer(question: str) -> str | None:
 
 Question: {question}
 """
-    model = genai.GenerativeModel(TEXT_MODEL)
+    model = _create_model()
     try:
         response = model.generate_content(prompt)
         if response and response.text:

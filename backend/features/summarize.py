@@ -1,15 +1,14 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 import re
 import logging
-from typing import List, Tuple, Optional
+from typing import List, Optional
 
 from config import FLASK_DEBUG
 
-
 summarize_bp = Blueprint("summarize", __name__)
-
 logger = logging.getLogger(__name__)
 
+VALID_STYLES = {"short", "concise", "detailed"}
 
 def _clean_selection_text(text: str) -> str:
     """Normalize selection text from PDF/Word to improve summary quality.
@@ -31,21 +30,56 @@ def _clean_selection_text(text: str) -> str:
     t = re.sub(r"^\s*[-•*]\s*", "• ", t, flags=re.MULTILINE)
     return t.strip()
 
+def _split_oversized_block(block: str, size: int, overlap: int = 200) -> List[str]:
+    """Two-stage split for blocks exceeding size limit:
+    1. Sentence-aware split on sentence boundaries
+    2. Hard character split for sentences still exceeding size limit
+    Leaves room for the configured overlap when blocks are combined into windows.
+    """
+    effective_max = max(size - max(overlap, 0) - 2, 100)
+    if len(block) <= effective_max:
+        return [block]
+
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", block) if s.strip()]
+    if not sentences:
+        sentences = [block]
+
+    result = []
+    for s in sentences:
+        if len(s) <= effective_max:
+            result.append(s)
+        else:
+            # Stage 2: hard character split
+            for i in range(0, len(s), effective_max):
+                chunk = s[i : i + effective_max].strip()
+                if chunk:
+                    result.append(chunk)
+    return result
 
 def _chunk_text(text: str, size: int = 1600, overlap: int = 200) -> List[str]:
-    """Chunk text with paragraph awareness, similar to main.chunk_text but self-contained.
+    """Chunk text with paragraph awareness, sentence splitting, and hard max bounds.
     Keeps a small overlap so map-reduce summaries retain continuity.
     """
     text = (text or "").strip()
     if not text:
         return []
-    paras = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
-    if not paras:
-        paras = [text]
+
+    raw_paras = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
+    if not raw_paras:
+        raw_paras = [text]
+
+    # Pre-process paragraphs: split any oversized paragraph into <= effective_max blocks
+    paras = []
+    for p in raw_paras:
+        paras.extend(_split_oversized_block(p, size, overlap))
+
     windows, buf, cur = [], [], 0
     for p in paras:
         plen = len(p) + 2
-        if not buf or cur + plen <= size:
+        if not buf:
+            buf.append(p)
+            cur = plen
+        elif cur + plen <= size:
             buf.append(p)
             cur += plen
         else:
@@ -62,7 +96,6 @@ def _chunk_text(text: str, size: int = 1600, overlap: int = 200) -> List[str]:
         windows.append("\n\n".join(buf))
     return windows
 
-
 def _build_prompt(selection: str, style: str = "concise", bullets: bool = True) -> str:
     bullet_hint = "Use bullet points where helpful." if bullets else "Write as short paragraphs."
     style_hint = {
@@ -74,73 +107,94 @@ def _build_prompt(selection: str, style: str = "concise", bullets: bool = True) 
 You are a helpful assistant. Summarize the selection below faithfully without adding facts.
 Preserve key terms, numbers, and definitions. {bullet_hint} {style_hint}
 
-Selection:\n\n{selection}
+Selection:
+
+{selection}
 
 Summary:
 """
 
+class TextSummarizer:
+    """Service handling text summarization using Gemini Map-Reduce."""
 
-def _map_reduce_summary(genai, model_name: str, selection: str, style: str, bullets: bool) -> str:
-    model = genai.GenerativeModel(model_name)
-    chunks = _chunk_text(selection)
-    if len(chunks) <= 1:
-        resp = model.generate_content(_build_prompt(selection, style, bullets), request_options={"timeout": 30})
-        return (getattr(resp, "text", "") or "").strip()
+    def __init__(self, text_model: str, genai_module):
+        self.text_model = text_model
+        self.genai = genai_module
 
-    partials = []
-    for ch in chunks:
-        r = model.generate_content(_build_prompt(ch, style, bullets), request_options={"timeout": 30})
-        partials.append((getattr(r, "text", "") or "").strip())
+    def summarize(self, selection_text: str, style: str = "concise", bullets: bool = True) -> str:
+        cleaned = _clean_selection_text(selection_text)
+        if not cleaned:
+            raise ValueError("Missing selectionText")
 
-    # Reduce step
-    combined = "\n\n".join(p for p in partials if p)
-    reduce_prompt = f"""
+        model = self.genai.GenerativeModel(self.text_model)
+        chunks = _chunk_text(cleaned)
+        if len(chunks) <= 1:
+            resp = model.generate_content(_build_prompt(cleaned, style, bullets), request_options={"timeout": 30})
+            return (getattr(resp, "text", "") or "").strip()
+
+        partials = []
+        for ch in chunks:
+            r = model.generate_content(_build_prompt(ch, style, bullets), request_options={"timeout": 30})
+            partials.append((getattr(r, "text", "") or "").strip())
+
+        combined = "\n\n".join(p for p in partials if p)
+        reduce_prompt = f"""
 You are aggregating multiple partial summaries of a longer selection. Merge them into a single cohesive summary.
 Remove redundancy, keep important details and numbers, and keep the tone neutral.
 Target length: {'120-180 words' if style=='concise' else '200-300 words' if style=='detailed' else '80-120 words'}.
 
-Partials:\n\n{combined}
+Partials:
+
+{combined}
 
 Final summary:
 """
-    final = model.generate_content(reduce_prompt, request_options={"timeout": 30})
-    return (getattr(final, "text", "") or "").strip()
+        final = model.generate_content(reduce_prompt, request_options={"timeout": 30})
+        return (getattr(final, "text", "") or "").strip()
 
 
-def init_summarizer(TEXT_MODEL: str, genai_module):
-    """Initialize routes with provided model config. Call from main.py after genai.configure()."""
+@summarize_bp.route("/api/summarize", methods=["POST", "OPTIONS"])
+def summarize_endpoint():
+    """Summarize text selection via TextSummarizer retrieved from current_app.extensions."""
+    if request.method == "OPTIONS":
+        return ("", 204)
 
-    @summarize_bp.route("/api/summarize", methods=["POST", "OPTIONS"])
-    def summarize_endpoint():
-        # Handle CORS preflight explicitly (some environments disable automatic OPTIONS).
-        if request.method == "OPTIONS":
-            return ("", 204)
+    summarizer = current_app.extensions.get("text_summarizer")
+    if summarizer is None:
+        return jsonify({"error": "Summarizer service not initialized"}), 500
 
-        body = request.get_json(silent=True) or {}
-        selection_text = (body.get("selectionText") or body.get("text") or "").strip()
-        # Optional context for audit and UI anchors
-        doc_id = (body.get("docId") or body.get("doc_id") or "").strip()
-        pages = body.get("pages")  # optional [start,end] or list
-        style = (body.get("style") or "concise").lower()
-        bullets = bool(body.get("bullets", True))
+    body = request.get_json(silent=True) or {}
+    selection_text = (body.get("selectionText") or body.get("text") or "").strip()
+    doc_id = (body.get("docId") or body.get("doc_id") or "").strip()
+    pages = body.get("pages")
+    style_raw = body.get("style")
+    style = (style_raw or "concise").lower()
+    bullets_val = body.get("bullets", True)
 
-        if not selection_text:
-            return jsonify({"error": "Missing selectionText"}), 400
+    if not selection_text:
+        return jsonify({"error": "Missing selectionText"}), 400
 
+    if style not in VALID_STYLES:
+        return jsonify({"error": "Invalid style. Must be one of: short, concise, detailed"}), 400
+
+    if not isinstance(bullets_val, bool):
+        return jsonify({"error": "'bullets' parameter must be a boolean"}), 400
+    bullets = bullets_val
+
+    try:
+        summary = summarizer.summarize(selection_text=selection_text, style=style, bullets=bullets)
+        if not summary:
+            return jsonify({"error": "Failed to summarize"}), 500
         cleaned = _clean_selection_text(selection_text)
-        try:
-            summary = _map_reduce_summary(genai_module, TEXT_MODEL, cleaned, style, bullets)
-            if not summary:
-                return jsonify({"error": "Failed to summarize"}), 500
-            return jsonify({
-                "summary": summary,
-                "doc_id": doc_id or None,
-                "pages": pages,
-                "length": len(cleaned),
-            })
-        except Exception as e:
-            logger.exception("Unexpected error in /api/summarize")
-            message = str(e) if FLASK_DEBUG else "An unexpected server error occurred."
-            return jsonify({"error": message}), 500
-
-    return summarize_bp
+        return jsonify({
+            "summary": summary,
+            "doc_id": doc_id or None,
+            "pages": pages,
+            "length": len(cleaned),
+        })
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        logger.exception("Unexpected error in /api/summarize")
+        message = str(e) if FLASK_DEBUG else "An unexpected server error occurred."
+        return jsonify({"error": message}), 500

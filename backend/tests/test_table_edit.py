@@ -170,3 +170,59 @@ def test_sync_table_checksum_no_change(mock_embed, mock_collection, client):
     assert len(res_data["updated_chunks"]) == 0
     mock_embed.assert_not_called()
     mock_collection.upsert.assert_not_called()
+
+
+@patch("features.table_edit.collection")
+@patch("features.table_edit.embed_document")
+def test_sync_table_paragraph_recreation(mock_embed, mock_collection, client):
+    # Mock Chroma collection returning both table chunk and existing paragraph chunk
+    mock_collection.get.side_effect = [
+        # First get call for sheet chunks
+        {
+            "ids": ["doc123:v1:0", "doc123:v1:1"],
+            "metadatas": [
+                {"row_start": 0, "row_end": 5, "chunk": 0, "chunk_type": "table", "is_table": True, "chunk_hash": "old_t_hash"},
+                {"chunk": 1, "chunk_type": "paragraph", "section": "S1", "chunk_hash": "old_p_hash"}
+            ],
+            "documents": ["Table Chunk Text", "Paragraph Chunk Text"]
+        },
+        # Second get call for max_chunk_index check across doc version
+        {
+            "metadatas": [
+                {"chunk": 0},
+                {"chunk": 1}
+            ]
+        }
+    ]
+    mock_embed.return_value = [0.2] * 768
+
+    csv_out = io.StringIO()
+    writer = csv.writer(csv_out)
+    writer.writerow(["Header1", "Header2"])
+    writer.writerow(["Val1", "Val2"])
+    file_b64 = base64.b64encode(csv_out.getvalue().encode("utf-8")).decode("utf-8")
+
+    payload = {
+        "doc_id": "doc123",
+        "filename": "file.csv",
+        "index_version": "v1",
+        "sheet": None,
+        "file_bytes": file_b64,
+        "headers": ["Header1", "Header2"],
+        "rows": [["Val1", "Val2"]],
+        "mutations": [
+            {"row": 0, "column": 0, "value": "NewVal1"}
+        ]
+    }
+
+    resp = client.post(
+        "/api/internal/document/sync-table",
+        json=payload,
+        headers={"x-service-token": "test_service_token"}
+    )
+
+    assert resp.status_code == 200
+    res = resp.get_json()
+    assert res["success"] is True
+    assert "recreated_paragraphs" in res
+    assert mock_collection.upsert.called

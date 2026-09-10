@@ -7,7 +7,7 @@ from services.bm25_service import (
     invalidate_bm25_index,
     tokenize,
 )
-from services import retrieval_service
+from services import retrieval_service, vector_versioning
 
 # Tokenizer tests
 def _kw(text: str) -> set:
@@ -138,29 +138,103 @@ def test_bm25_top_k_applies_to_positive_results():
 
 def test_retrieval_uses_vector_results_when_bm25_returns_empty():
     """Verify that hybrid retrieval falls back to vector-only results naturally if BM25 search returns empty."""
-    # Mock bm25_search to return empty (simulating zero lexical overlap)
-    with patch("services.retrieval_service.bm25_search") as mock_bm25:
-        mock_bm25.return_value = []
+    with patch("services.vector_versioning.get_index_state") as mock_state:
+        mock_state.return_value = {"activeVersion": "v1"}
 
-        # Mock Chroma query results
-        with patch("services.retrieval_service.collection") as mock_coll:
-            mock_coll.get.return_value = {
-                "ids": ["dummy_chunk"],
-                "documents": ["dummy_text"],
-                "metadatas": [{"doc_id": "doc5", "embedding_model": "models/text-embedding-004", "pipeline_version": "6"}]
-            }
-            mock_coll.query.return_value = {
-                "documents": [["Semantic match content in document"]],
-                "distances": [[0.35]],
-                "metadatas": [[{"doc_id": "doc5", "is_table": False}]],
-            }
+        # Mock bm25_search to return empty (simulating zero lexical overlap)
+        with patch("services.retrieval_service.bm25_search") as mock_bm25:
+            mock_bm25.return_value = []
 
-            # Mock embed_query to return dummy embedding
-            with patch("services.retrieval_service.embed_query") as mock_embed:
-                mock_embed.return_value = [0.1, 0.2, 0.3]
+            # Mock Chroma query results
+            with patch("services.retrieval_service.collection") as mock_coll:
+                mock_coll.get.return_value = {
+                    "ids": ["dummy_chunk"],
+                    "documents": ["dummy_text"],
+                    "metadatas": [{"doc_id": "doc5", "index_version": "v1", "embedding_model": "models/text-embedding-004", "pipeline_version": "6"}]
+                }
+                mock_coll.query.return_value = {
+                    "documents": [["Semantic match content in document"]],
+                    "distances": [[0.35]],
+                    "metadatas": [[{"doc_id": "doc5", "is_table": False}]],
+                }
 
-                ctx, err = retrieval_service.retrieve_context("semantic query", "doc5")
+                # Mock embed_query to return dummy embedding
+                with patch("services.retrieval_service.embed_query") as mock_embed:
+                    mock_embed.return_value = [0.1, 0.2, 0.3]
 
-                assert err is None
-                assert ctx == "Semantic match content in document"
-                mock_bm25.assert_called_once()
+                    ctx, err = retrieval_service.retrieve_context("semantic query", "doc5")
+
+                    assert err is None
+                    assert ctx == "Semantic match content in document"
+                    mock_bm25.assert_called_once()
+
+
+def test_bm25_cache_update_operation(clean_bm25_cache):
+    from services.bm25_service import _bm25_cache, _bm25_lock
+
+    with _bm25_lock:
+        _bm25_cache[("doc_update", "v1")] = {
+            "chunk_ids": ["c0", "c1", "c2"],
+            "texts": ["Text 0", "Text 1", "Text 2"],
+            "chunk_id_to_index": {"c0": 0, "c1": 1, "c2": 2},
+        }
+
+    # Perform update operation
+    cid = "c1"
+    new_text = "Updated Text 1"
+    with _bm25_lock:
+        entry = _bm25_cache[("doc_update", "v1")]
+        idx = entry["chunk_id_to_index"].get(cid)
+        assert idx == 1
+        entry["texts"][idx] = new_text
+
+    assert entry["texts"][entry["chunk_id_to_index"][cid]] == "Updated Text 1"
+
+
+def test_bm25_cache_insert_operation(clean_bm25_cache):
+    from services.bm25_service import _bm25_cache, _bm25_lock
+
+    with _bm25_lock:
+        _bm25_cache[("doc_insert", "v1")] = {
+            "chunk_ids": ["c0", "c1"],
+            "texts": ["Text 0", "Text 1"],
+            "chunk_id_to_index": {"c0": 0, "c1": 1},
+        }
+
+    new_cid = "c2"
+    new_text = "Inserted Text 2"
+    with _bm25_lock:
+        entry = _bm25_cache[("doc_insert", "v1")]
+        idx = len(entry["chunk_ids"])
+        entry["chunk_ids"].append(new_cid)
+        entry["texts"].append(new_text)
+        entry["chunk_id_to_index"][new_cid] = idx
+
+    assert new_cid in entry["chunk_id_to_index"]
+    assert entry["chunk_id_to_index"][new_cid] == entry["chunk_ids"].index(new_cid)
+    assert entry["texts"][entry["chunk_id_to_index"][new_cid]] == "Inserted Text 2"
+
+
+def test_bm25_cache_delete_operation(clean_bm25_cache):
+    from services.bm25_service import _bm25_cache, _bm25_lock
+
+    with _bm25_lock:
+        _bm25_cache[("doc_delete", "v1")] = {
+            "chunk_ids": ["c0", "c1", "c2", "c3"],
+            "texts": ["Text 0", "Text 1", "Text 2", "Text 3"],
+            "chunk_id_to_index": {"c0": 0, "c1": 1, "c2": 2, "c3": 3},
+        }
+
+    delete_cid = "c1"
+    with _bm25_lock:
+        entry = _bm25_cache[("doc_delete", "v1")]
+        idx = entry["chunk_id_to_index"].pop(delete_cid, None)
+        assert idx == 1
+        entry["chunk_ids"].pop(idx)
+        entry["texts"].pop(idx)
+        entry["chunk_id_to_index"] = {c: i for i, c in enumerate(entry["chunk_ids"])}
+
+    assert delete_cid not in entry["chunk_id_to_index"]
+    for i, c in enumerate(entry["chunk_ids"]):
+        assert entry["chunk_id_to_index"][c] == i
+

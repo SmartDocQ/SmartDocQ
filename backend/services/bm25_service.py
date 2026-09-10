@@ -26,7 +26,6 @@ from rank_bm25 import BM25Okapi
 
 logger = logging.getLogger(__name__)
 
-
 # ---------------------------------------------------------------------------
 # Tokenizer  (mirrors the _keywords() logic previously in retrieval_service)
 # ---------------------------------------------------------------------------
@@ -38,11 +37,9 @@ _STOP_WORDS = {
     "about", "over", "under", "within", "between",
 }
 
-
 def _normalize_numeric_tokens(text: str) -> str:
     """Strip leading zeros from numeric tokens (e.g. '021' -> '21')."""
     return re.sub(r"\b0+(\d+)\b", r"\1", text or "")
-
 
 def tokenize(text: str) -> list[str]:
     """Tokenize *text* for BM25 indexing / querying.
@@ -61,7 +58,6 @@ def tokenize(text: str) -> list[str]:
         if t and (len(t) >= 2 or t.isdigit()) and t not in _STOP_WORDS
     ]
 
-
 # ---------------------------------------------------------------------------
 # In-process cache
 # ---------------------------------------------------------------------------
@@ -70,7 +66,6 @@ BM25_CACHE_TTL: int = 10800  # seconds — 3 hours
 
 _bm25_cache: dict[tuple[str, str | None], dict] = {}
 _bm25_lock = threading.Lock()
-
 
 def build_bm25_index(
     doc_id: str,
@@ -121,12 +116,14 @@ def build_bm25_index(
 
     tokenized = [tokenize(t) for t in texts]
     bm25 = BM25Okapi(tokenized)
+    chunk_id_to_index = {cid: idx for idx, cid in enumerate(chunk_ids)}
 
     with _bm25_lock:
         _bm25_cache[(doc_id, index_version)] = {
             "bm25": bm25,
             "chunk_ids": chunk_ids,
             "texts": texts,
+            "chunk_id_to_index": chunk_id_to_index,
             "is_table": is_table_flags,
             "file_hash": file_hash,
             "expires_at": time.time() + BM25_CACHE_TTL,
@@ -140,7 +137,6 @@ def build_bm25_index(
         (file_hash or "")[:16] or "none",
     )
 
-
 def invalidate_bm25_index(doc_id: str, index_version: str | None = None) -> None:
     """Remove the cached BM25 index for (doc_id, index_version).
 
@@ -152,7 +148,6 @@ def invalidate_bm25_index(doc_id: str, index_version: str | None = None) -> None
     if removed is not None:
         logger.debug("[BM25] Invalidated index for doc_id=%s version=%s", doc_id, index_version)
 
-
 def invalidate_all_bm25_versions(doc_id: str) -> None:
     """Remove all cached BM25 index versions for a document."""
     with _bm25_lock:
@@ -162,7 +157,6 @@ def invalidate_all_bm25_versions(doc_id: str) -> None:
     if keys_to_remove:
         logger.debug("[BM25] Invalidated all versions for doc_id=%s", doc_id)
 
-
 def get_bm25_chunk_count(doc_id: str, index_version: str | None = None) -> int:
     """Return count of chunks in cached BM25 index for (doc_id, index_version)."""
     with _bm25_lock:
@@ -170,7 +164,6 @@ def get_bm25_chunk_count(doc_id: str, index_version: str | None = None) -> int:
         if isinstance(entry, dict):
             return len(entry.get("chunk_ids", []))
     return 0
-
 
 def bm25_search(
     doc_id: str,

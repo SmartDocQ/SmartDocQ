@@ -65,10 +65,11 @@ except Exception as e:
     print("Flashcard blueprint not loaded:", e)
 
 try:
-    from features.summarize import init_summarizer, summarize_bp
-    app.register_blueprint(init_summarizer(TEXT_MODEL, genai))
-except Exception:
-    pass
+    from features.summarize import summarize_bp, TextSummarizer
+    app.extensions["text_summarizer"] = TextSummarizer(TEXT_MODEL, genai)
+    app.register_blueprint(summarize_bp)
+except Exception as e:
+    print("Summarize blueprint not loaded:", e)
 
 # ====== ERROR HANDLERS ======
 @app.errorhandler(404)

@@ -11,7 +11,7 @@ Copy `.env.example` to `.env` and configure:
 - `GEMINI_API_KEY` — Google Generative AI API key
 - `TEXT_MODEL` — Optional override for the Gemini text model (default: `models/gemini-2.5-flash`)
 - `EMBED_MODEL` — Optional override for the embedding model (default: `models/gemini-embedding-2`)
-- `INDEX_BATCH_SIZE` — Optional Chroma flush size during indexing (default: `64`)
+- `INDEX_BATCH_SIZE` — Optional batch size for Chroma chunk upserts (default: `64`)
 - `JAILBREAK_THRESHOLD` — Optional weighted threshold for jailbreak detection (default: `3`)
 - `BM25_CACHE_TTL` — Optional BM25 cache lifetime in seconds (recommended: 86400)
 
@@ -33,7 +33,6 @@ The service runs on port `5001` by default.
 
 ## Dependencies
 
-SmartDocQ AI Service leverages modern libraries to implement a resilient document understanding and search interface:
 - **PyMuPDF4LLM / PyMuPDF (fitz)**: Multi-format PDF layout parser converting PDF text and tables to Markdown.
 - **PyPDF2**: Fallback PDF text parser.
 - **tiktoken**: Fast byte pair encoding (BPE) tokenizer used for chunk bounds estimation.
@@ -163,27 +162,7 @@ Section: [H1 Section Title]
 Subsection: [H2 > H3 Subsection Path]
 Pages: [Page / Page Range]
 ```
-This contextual prepending guarantees that relevant facts are retrieved correctly even when page-level chunks lack direct textual keywords. In contrast, ChromaDB stores clean chunk text as documents to prevent lexical BM25 search pollution.
-
----
-
-## RETRIEVAL QUALITY FEATURES
-
-- **Hybrid Retrieval** (Vector + BM25)
-- **Reciprocal Rank Fusion (RRF)**
-- **Table-Aware Retrieval**
-- **Contextual Chunk Headers** (Section, Subsection, Page Range)
-- **Block-aware Chunking**
-- **Context-preserving Block Parsing**
-- **Section-aware Indexing**
-- **Page-aware Metadata**
-- **Automatic Header/Footer Removal**
-- **Automatic PDF Fallback Chain**
-- **Token-aware Chunk Sizing**
-- **Version-aware retrieval isolation**
-- **Automatic Index Version Validation**
-- **Incremental Spreadsheet Editing**
-
+This contextual prepending gives the embedding model additional document structure, which can help retrieval when page-level chunks lack direct textual keywords. In contrast, ChromaDB stores clean chunk text as documents to prevent lexical BM25 search pollution.
 
 ---
 
@@ -205,7 +184,7 @@ These measurements are used for diagnostics and performance tuning.
 
 - **Server-to-Server Authentication**: All AI endpoints require a valid shared `SERVICE_TOKEN`. Browser clients cannot invoke protected Flask APIs directly.
 - **Constant-Time Token Verification**: Incoming service tokens are validated using `hmac.compare_digest` to mitigate timing attacks.
-- **Layered Authorization Model**: JWT authentication, document ownership checks, and rate limiting are enforced by the Node.js backend before requests reach the AI service.
+- **Request Authorization**: Protected AI endpoints require authenticated server-to-server requests from the Node.js backend.
 - **Audit Identity Forwarding**: Authenticated user IDs are forwarded through the `x-user-id` header for structured logging and future auditing.
 - **Secure Temporary File Handling**: Word document conversion and preview operations sanitize user-supplied filenames and use randomized UUID-based temporary filenames with validated extensions, preventing path traversal, arbitrary file writes, and filename collisions.
 - Rejects common jailbreak and prompt-manipulation attempts in user questions before retrieval and LLM invocation.
@@ -268,6 +247,21 @@ python -m pytest tests/test_indexer.py -v
 # Run retrieval unit tests (hybrid search, BM25, metadata caching)
 python -m pytest tests/test_retrieval_service.py -v
 
+# Run DocumentService unit tests (context retrieval, multi-format parsing)
+python -m pytest tests/test_document_service.py -v
+
+# Run QuizGenerator unit tests (single-pass JSON quiz generation)
+python -m pytest tests/test_quiz_generator.py -v
+
+# Run FlashcardGenerator unit tests (normalized deduplicated flashcards)
+python -m pytest tests/test_flashcard_generator.py -v
+
+# Run TextSummarizer unit tests (two-stage chunk bounds, style/boolean validation)
+python -m pytest tests/test_summarizer.py -v
+
+# Run TableEditor unit tests (incremental cell sync, O(1) BM25 lookup maps)
+python -m pytest tests/test_table_edit.py -v
+
 # Run security checks tests (sensitive detectors, Aadhaar, CC verification)
 python -m pytest tests/test_security.py -v
 
@@ -278,12 +272,19 @@ python -m pytest tests/test_vector_versioning.py -v
 python -m pytest tests/test_embedding_service.py -v
 ```
 
-## INDEXING ARCHITECTURE
+---
+
+## INDEXING & CORE SERVICES ARCHITECTURE
 
 - `indexer.py` — Main indexing orchestration and lifecycle management
 - `pipeline.py` — Structured extraction, embedding preparation, and shadow index construction
 - `chunking.py` — Markdown normalization, parsing, section detection, and token-aware chunking
+- `document_service.py` — `DocumentService` for context retrieval and multi-format text parsing
 - `background.py` — Background indexing scheduler and recovery workflow
+- `features/quiz.py` — `QuizGenerator` service for single-pass document quiz generation
+- `features/flashcard.py` — `FlashcardGenerator` service with normalized front deduplication
+- `features/summarize.py` — `TextSummarizer` Map-Reduce service with guaranteed chunk bounds ($\le 1600$ chars) and strict HTTP input validation
+- `features/table_edit.py` — `TableEditor` incremental cell synchronization service with $O(1)$ BM25 cache lookup maps
 
 ---
 
@@ -328,4 +329,3 @@ The incremental spreadsheet editing feature implements several advanced engineer
 - **Retry-based Persistence**: Includes single-retry error handling for critical asynchronous writes, such as audit logs and chunk text updates.
 - **Split-Strategy Chunk Coordination**: Dynamically updates table chunks in-place, while paragraph chunks are updated or regenerated based on boundary shift conditions.
 - **Cache Consistency**: Performs debounced lexical cache updates, keeping in-memory BM25 caches consistent with updated vector databases.
-

@@ -1,4 +1,4 @@
-# SmartDocQ — AI Document Assistant | Document Intelligence & Summarization Platform
+# SmartDocQ — AI Document Assistant
 
 **Live Demo:** [https://smartdocq.vercel.app](https://smartdocq.vercel.app)
 
@@ -243,14 +243,21 @@ SmartDocQ uses a Hybrid RAG pipeline that combines:
 - **Version-isolated BM25 lexical retrieval** with in-memory caching
 - **Reciprocal Rank Fusion (RRF)**
 - **Table-aware ranking**
-- **Incremental spreadsheet synchronization** for editable CSV/XLSX documents
 - **Contextual document embeddings** (Document, Section, Subsection, Page Ranges)
 
 This approach improves both semantic understanding and exact-match retrieval for identifiers, spreadsheet data, and structured documents.
 
-### Retrieval Evaluation
+### Benchmarking
 
-The retrieval pipeline includes a reproducible benchmarking module using the BEIR SciFact dataset to evaluate retrieval quality and latency. Experimental retrieval configurations are evaluated separately from the production pipeline. For details, see [backend/benchmark/README.md](backend/benchmark/README.md).
+SmartDocQ includes separate benchmarks for PDF extraction and retrieval:
+
+- **PDF Extractor Benchmark** — Compares 10 PDF extraction libraries across 10 diverse documents, measuring extraction time, memory usage, CPU usage, page coverage, and structural extraction quality. This benchmark supported the selection of PyMuPDF4LLM for SmartDocQ's structure-aware PDF indexing pipeline.
+- **Retrieval Benchmark** — Evaluates Hybrid Dense Retrieval + BM25 + RRF against an experimental RRF + BGE Cross-Encoder pipeline using the BEIR SciFact dataset. The benchmark measures retrieval quality and query latency.
+
+Detailed methodology, configurations, results, and analysis are documented separately:
+
+- [PDF Extractor Benchmark](docs/benchmark/PDF-Extractor-Benchmark.md)
+- [Retrieval Benchmark](backend/benchmark/README.md)
 
 ---
 
