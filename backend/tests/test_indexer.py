@@ -306,7 +306,7 @@ def test_index_sections_passes_contextual_header_to_embeddings(
 ):
     captured = {}
 
-    def capture_embedding_input(text, title=None, context=None, timeout_sec=20):
+    def capture_embedding_input(text, title=None, context=None, *args, **kwargs):
         captured["text"] = text
         captured["title"] = title
         captured["context"] = context
@@ -669,7 +669,7 @@ def test_background_index_happy_path(monkeypatch, clean_indexing_state, clean_co
 
     called = {}
 
-    def fake_index_bytes(doc_id_arg, filename_arg, mimetype_arg, data_bytes_arg, file_hash=None):
+    def fake_index_bytes(doc_id_arg, filename_arg, mimetype_arg, data_bytes_arg, file_hash=None, **kwargs):
         called["args"] = (doc_id_arg, filename_arg, mimetype_arg, data_bytes_arg, file_hash)
         return True, 1
 

@@ -21,6 +21,7 @@ import re
 import threading
 import time
 import logging
+import heapq
 
 from rank_bm25 import BM25Okapi
 
@@ -207,14 +208,14 @@ def bm25_search(
 
     raw_scores = bm25.get_scores(q_tokens)
 
-    ranked = sorted(
-        zip(chunk_ids, raw_scores, texts, is_table_flags),
-        key=lambda x: float(x[1]),
-        reverse=True,
+    return heapq.nlargest(
+        top_k,
+        (
+            (cid, float(score), text, is_tbl)
+            for cid, score, text, is_tbl in zip(
+                chunk_ids, raw_scores, texts, is_table_flags
+            )
+            if float(score) > 0
+        ),
+        key=lambda x: x[1],
     )
-
-    return [
-        (cid, float(score), text, is_tbl)
-        for cid, score, text, is_tbl in ranked
-        if float(score) > 0
-    ][:top_k]

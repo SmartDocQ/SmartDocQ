@@ -62,6 +62,10 @@ LLM_PRIMARY_TIMEOUT = int(os.environ.get("LLM_PRIMARY_TIMEOUT", "10"))
 LLM_FALLBACK_TIMEOUT = int(os.environ.get("LLM_FALLBACK_TIMEOUT", "10"))
 LLM_TOTAL_TIMEOUT = int(os.environ.get("LLM_TOTAL_TIMEOUT", "15"))
 
+# ====== EMBEDDING LATENCY BUDGET ======
+EMBEDDING_TIMEOUT = int(os.environ.get("EMBEDDING_TIMEOUT", "5"))
+EMBEDDING_TOTAL_TIMEOUT = int(os.environ.get("EMBEDDING_TOTAL_TIMEOUT", "10"))
+
 # ====== INDEXING / PIPELINE VERSIONING ======
 # Bump this when you make changes that should force reindexing even if the
 # embedding model stays the same (e.g., new chunking strategy, new cleaners).

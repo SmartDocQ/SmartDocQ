@@ -18,6 +18,7 @@ __pycache__/
 
 # Benchmark datasets & large evaluation logs
 backend/benchmark/datasets/
+backend/benchmark/scripts/benchmark_pdf_extraction.py
 backend/benchmark/results/per_query_results.json
 backend/benchmark/results/query_emb_cache.json
 benchmark/datasets/

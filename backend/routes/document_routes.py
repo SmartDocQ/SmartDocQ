@@ -190,7 +190,7 @@ def preview_word_as_pdf(doc_id):
 
 @document_bp.route("/api/document/my", methods=["GET"])
 def list_docs():
-    result = collection.get()
+    result = collection.get(include=["metadatas"])
     metas = result.get("metadatas", []) or []
     docs = {}
     for m in metas:
@@ -212,11 +212,25 @@ def rename_doc(doc_id):
     new_name = data.get("name", "").strip()
     if not new_name:
         return jsonify({"error": "Missing new name"}), 400
-    all_meta = collection.get()["metadatas"]
-    for m in all_meta:
-        if m and m.get("doc_id") == doc_id:
+
+    res = collection.get(where={"doc_id": doc_id}, include=["metadatas"])
+    ids = res.get("ids", [])
+    metas = res.get("metadatas", [])
+
+    if not ids:
+        return jsonify({"error": "Document not found"}), 404
+
+    for m in metas:
+        if isinstance(m, dict):
             m["filename"] = new_name
-    return jsonify({"message": "Renamed successfully"})
+
+    try:
+        collection.update(ids=ids, metadatas=metas)
+    except Exception:
+        logger.exception("Failed to persist document rename for %s", doc_id)
+        return jsonify({"error": "Failed to rename document"}), 500
+
+    return jsonify({"message": "Renamed successfully", "doc_id": doc_id, "name": new_name})
 
 
 @document_bp.route("/api/document/<doc_id>", methods=["DELETE"])
@@ -360,30 +374,34 @@ def preview_spreadsheet(doc_id):
         tables = extract_tables_for_file(filename, mimetype, data, source_key=doc_id)
 
         # Group and combine tables by sheet
+        sheet_map = {}
+        sheet_counts = {}
         final_sheets = []
+
         for t in tables:
             base_sheet_name = t.get("sheet") or "Sheet1"
             headers = [_normalize_cell(h) for h in t.get("headers", [])]
             rows = [[_normalize_cell(cell) for cell in row] for row in t.get("rows", [])]
 
-            matched_entry = None
-            for entry in final_sheets:
-                if entry["base_name"] == base_sheet_name and entry["headers"] == headers:
-                    matched_entry = entry
-                    break
+            key = (base_sheet_name, tuple(headers))
+            matched_entry = sheet_map.get(key)
 
             if matched_entry:
                 matched_entry["rows"].extend(rows)
-            else:
-                count = sum(1 for entry in final_sheets if entry["base_name"] == base_sheet_name)
-                name = base_sheet_name if count == 0 else f"{base_sheet_name} · Table {count + 1}"
-                new_entry = {
-                    "base_name": base_sheet_name,
-                    "name": name,
-                    "headers": headers,
-                    "rows": rows,
-                }
-                final_sheets.append(new_entry)
+                continue
+
+            count = sheet_counts.get(base_sheet_name, 0)
+            name = base_sheet_name if count == 0 else f"{base_sheet_name} · Table {count + 1}"
+            new_entry = {
+                "base_name": base_sheet_name,
+                "name": name,
+                "headers": headers,
+                "rows": rows,
+            }
+
+            sheet_map[key] = new_entry
+            sheet_counts[base_sheet_name] = count + 1
+            final_sheets.append(new_entry)
 
         # Apply configuration limits
         from config import MAX_PREVIEW_ROWS_PER_SHEET, MAX_PREVIEW_COLUMNS
@@ -421,4 +439,3 @@ def preview_spreadsheet(doc_id):
         logger.exception("Unexpected error in spreadsheet preview endpoint")
         message = str(e) if FLASK_DEBUG else "An unexpected server error occurred."
         return jsonify({"error": message}), 500
-

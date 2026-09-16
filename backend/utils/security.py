@@ -1,7 +1,11 @@
+import os
 import re
+import hmac
+import logging
+from functools import wraps
+from flask import request, jsonify, current_app
 from better_profanity import profanity
 from config import URL_REGEX, JAILBREAK_THRESHOLD
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -227,20 +231,20 @@ def is_greeting_or_smalltalk(text: str) -> bool:
 # ====== JAILBREAK / PROMPT-INJECTION (USER INPUT) ======
 # Use *high-precision* patterns and a conservative threshold to avoid false positives.
 # We intentionally DO NOT match broad phrases like "act as" or "pretend you are".
-HIGH_RISK_PATTERNS = {
-    r"ignore\s+(all\s+)?previous\s+instructions?": 3,
-    r"disregard\s+(all\s+)?instructions?": 3,
-    r"forget\s+your\s+instructions?": 3,
-    r"reveal\s+(your|the)\s+(system|developer)\s+prompt": 4,
-    r"print\s+(your|the)\s+(system|developer)\s+prompt": 4,
-    r"developer\s+mode": 3,
-    r"system\s+prompt": 2,
-    r"prompt\s+leak": 3,
-    r"jailbreak": 3,
-    r"bypass\s+(your|the)\s+(rules|restrictions|guardrails)": 3,
-    r"answer\s+using\s+outside\s+knowledge": 2,
-    r"ignore\s+the\s+document": 2,
-}
+HIGH_RISK_PATTERNS = (
+    (re.compile(r"ignore\s+(all\s+)?previous\s+instructions?", re.IGNORECASE), 3),
+    (re.compile(r"disregard\s+(all\s+)?instructions?", re.IGNORECASE), 3),
+    (re.compile(r"forget\s+your\s+instructions?", re.IGNORECASE), 3),
+    (re.compile(r"reveal\s+(your|the)\s+(system|developer)\s+prompt", re.IGNORECASE), 4),
+    (re.compile(r"print\s+(your|the)\s+(system|developer)\s+prompt", re.IGNORECASE), 4),
+    (re.compile(r"developer\s+mode", re.IGNORECASE), 3),
+    (re.compile(r"system\s+prompt", re.IGNORECASE), 2),
+    (re.compile(r"prompt\s+leak", re.IGNORECASE), 3),
+    (re.compile(r"jailbreak", re.IGNORECASE), 3),
+    (re.compile(r"bypass\s+(your|the)\s+(rules|restrictions|guardrails)", re.IGNORECASE), 3),
+    (re.compile(r"answer\s+using\s+outside\s+knowledge", re.IGNORECASE), 2),
+    (re.compile(r"ignore\s+the\s+document", re.IGNORECASE), 2),
+)
 
 
 def jailbreak_score(text: str) -> int:
@@ -249,12 +253,9 @@ def jailbreak_score(text: str) -> int:
         return 0
 
     score = 0
-    for pattern, weight in HIGH_RISK_PATTERNS.items():
-        try:
-            if re.search(pattern, s, re.IGNORECASE):
-                score += int(weight)
-        except re.error:
-            continue
+    for pattern, weight in HIGH_RISK_PATTERNS:
+        if pattern.search(s):
+            score += weight
 
     return score
 
@@ -265,11 +266,6 @@ def contains_jailbreak_attempt(text: str) -> bool:
 
 
 # ====== SERVICE AUTHENTICATION (DEFAULT-DENY) ======
-import hmac
-import os
-from functools import wraps
-from flask import request, jsonify, current_app
-
 def public_route(f):
     """Decorator to mark a route as publicly accessible without a service token."""
     f._is_public = True

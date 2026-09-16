@@ -17,7 +17,20 @@ def run_background_index(doc_id: str, *, indexing_lock, indexing_in_progress):
         if not ok:
             return
 
-        text_for_scan = extract_text_for_mimetype(filename, mimetype, data_bytes)
+        ext = (filename.rsplit(".", 1)[-1].lower() if "." in (filename or "") else "")
+        is_pdf = (mimetype == "application/pdf" or ext == "pdf")
+
+        pre_extracted_pages = None
+        pre_extracted_text = None
+
+        if is_pdf:
+            from utils.extraction import extract_pdf
+            pre_extracted_pages = extract_pdf(data_bytes)
+            text_for_scan = "\n".join(p["text"] for p in pre_extracted_pages) if pre_extracted_pages else ""
+        else:
+            text_for_scan = extract_text_for_mimetype(filename, mimetype, data_bytes)
+            pre_extracted_text = text_for_scan
+
         if not text_for_scan:
             return
 
@@ -43,7 +56,15 @@ def run_background_index(doc_id: str, *, indexing_lock, indexing_in_progress):
 
         from indexing.indexer import index_bytes
 
-        index_bytes(doc_id, filename, mimetype, data_bytes, file_hash=file_hash)
+        index_bytes(
+            doc_id,
+            filename,
+            mimetype,
+            data_bytes,
+            file_hash=file_hash,
+            pre_extracted_pages=pre_extracted_pages,
+            pre_extracted_text=pre_extracted_text,
+        )
 
     except Exception as e:
         logger.exception("Background indexing failed for %s: %s", doc_id, e)

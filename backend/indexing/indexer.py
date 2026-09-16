@@ -106,16 +106,24 @@ def _index_document_by_type(
     chunk_records: list,
     index_version: str,
     file_hash: str | None = None,
+    pre_extracted_pages: list | None = None,
+    pre_extracted_text: str | None = None,
 ):
     match doc_type:
         case "pdf":
-            return _index_pdf_document(doc_id, filename, data, tables, chunk_records, index_version, file_hash=file_hash)
+            return _index_pdf_document(
+                doc_id, filename, data, tables, chunk_records, index_version, file_hash=file_hash, pre_extracted_pages=pre_extracted_pages
+            )
         case "docx" | "doc":
-            return _index_docx_document(doc_id, filename, data, tables, chunk_records, index_version, file_hash=file_hash)
+            return _index_docx_document(
+                doc_id, filename, data, tables, chunk_records, index_version, file_hash=file_hash, pre_extracted_text=pre_extracted_text
+            )
         case "txt":
             return _index_txt_document(doc_id, filename, data, tables, chunk_records, index_version, file_hash=file_hash)
         case "csv" | "xlsx":
-            return _index_sheet_document(doc_id, filename, doc_type, mimetype, data, tables, chunk_records, index_version, file_hash=file_hash)
+            return _index_sheet_document(
+                doc_id, filename, doc_type, mimetype, data, tables, chunk_records, index_version, file_hash=file_hash, pre_extracted_text=pre_extracted_text
+            )
         case _:
             return False, 0
 
@@ -161,12 +169,30 @@ def _index_text_document(
 
     return True, added
 
-def _index_pdf_document(doc_id: str, filename: str, data: bytes, tables: list, chunk_records: list, index_version: str, file_hash: str | None = None):
-    pages = extraction.extract_pdf(data)
+def _index_pdf_document(
+    doc_id: str,
+    filename: str,
+    data: bytes,
+    tables: list,
+    chunk_records: list,
+    index_version: str,
+    file_hash: str | None = None,
+    pre_extracted_pages: list | None = None,
+):
+    pages = pre_extracted_pages if pre_extracted_pages is not None else extraction.extract_pdf(data)
     return _index_text_document(doc_id, filename, "pdf", pages, tables, chunk_records, index_version, file_hash=file_hash)
 
-def _index_docx_document(doc_id: str, filename: str, data: bytes, tables: list, chunk_records: list, index_version: str, file_hash: str | None = None):
-    text = extraction.extract_docx(data)
+def _index_docx_document(
+    doc_id: str,
+    filename: str,
+    data: bytes,
+    tables: list,
+    chunk_records: list,
+    index_version: str,
+    file_hash: str | None = None,
+    pre_extracted_text: str | None = None,
+):
+    text = pre_extracted_text if pre_extracted_text is not None else extraction.extract_docx(data)
     pages = [{"page": 1, "text": text}] if text.strip() else []
     return _index_text_document(doc_id, filename, "docx", pages, tables, chunk_records, index_version, file_hash=file_hash)
 
@@ -175,8 +201,19 @@ def _index_txt_document(doc_id: str, filename: str, data: bytes, tables: list, c
     pages = [{"page": 1, "text": text}] if text.strip() else []
     return _index_text_document(doc_id, filename, "txt", pages, tables, chunk_records, index_version, file_hash=file_hash)
 
-def _index_sheet_document(doc_id: str, filename: str, doc_type: str, mimetype: str, data: bytes, tables: list, chunk_records: list, index_version: str, file_hash: str | None = None):
-    text = extract_text_for_mimetype(filename, mimetype, data)
+def _index_sheet_document(
+    doc_id: str,
+    filename: str,
+    doc_type: str,
+    mimetype: str,
+    data: bytes,
+    tables: list,
+    chunk_records: list,
+    index_version: str,
+    file_hash: str | None = None,
+    pre_extracted_text: str | None = None,
+):
+    text = pre_extracted_text if pre_extracted_text is not None else extract_text_for_mimetype(filename, mimetype, data)
     if not text and not tables:
         return False, 0
 
@@ -213,6 +250,8 @@ def index_bytes(
     mimetype: str,
     data: bytes,
     file_hash: str | None = None,
+    pre_extracted_pages: list | None = None,
+    pre_extracted_text: str | None = None,
 ):
     doc_type = extraction.get_document_type(filename, mimetype)
 
@@ -242,6 +281,8 @@ def index_bytes(
             chunk_records,
             index_version,
             file_hash=file_hash,
+            pre_extracted_pages=pre_extracted_pages,
+            pre_extracted_text=pre_extracted_text,
         )
 
         if not ok:

@@ -521,24 +521,30 @@ def split_large_table_block(table_content: str, max_tokens: int) -> list[str]:
     
     sub_tables = []
     current_rows = []
-    current_tokens = estimate_token_count("\n".join(headers))
-    
+    header_tokens = estimate_token_count("\n".join(headers))
+    current_tokens = header_tokens
+
     for row in data_rows:
         row_tokens = estimate_token_count(row)
-        
+
         # If adding row exceeds limit, flush
         if current_rows and current_tokens + row_tokens > max_tokens:
             sub_tables.append("\n".join(headers + current_rows))
             # Only keep a 1-row overlap for well-formed markdown tables.
-            current_rows = [current_rows[-1]] if allow_overlap else []
-            current_tokens = estimate_token_count("\n".join(headers + current_rows))
-            
+            if allow_overlap:
+                overlap_row = current_rows[-1]
+                current_rows = [overlap_row]
+                current_tokens = header_tokens + estimate_token_count(overlap_row)
+            else:
+                current_rows = []
+                current_tokens = header_tokens
+
         current_rows.append(row)
         current_tokens += row_tokens
-        
+
     if current_rows:
         sub_tables.append("\n".join(headers + current_rows))
-        
+
     return sub_tables
 
 
