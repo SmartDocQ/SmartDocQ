@@ -57,7 +57,12 @@ CEREBRAS_FALLBACK_MODEL = "llama3.1-8b"
 CEREBRAS_MODELS = (CEREBRAS_PRIMARY_MODEL, CEREBRAS_FALLBACK_MODEL)
 EMBED_MODEL = os.environ.get("EMBED_MODEL", "models/gemini-embedding-2")
 
-# ====== LLM ROUTING LATENCY BUDGET ======
+# ====== BLOOM FILTER FEATURE FLAG & CONFIG ======
+ENABLE_INDEX_BLOOM = os.environ.get("ENABLE_INDEX_BLOOM", "false").lower() in ("true", "1", "t", "yes")
+INDEX_BLOOM_CAPACITY = int(os.environ.get("INDEX_BLOOM_CAPACITY", "50000"))
+INDEX_BLOOM_ERROR_RATE = float(os.environ.get("INDEX_BLOOM_ERROR_RATE", "0.01"))
+
+
 LLM_PRIMARY_TIMEOUT = int(os.environ.get("LLM_PRIMARY_TIMEOUT", "10"))
 LLM_FALLBACK_TIMEOUT = int(os.environ.get("LLM_FALLBACK_TIMEOUT", "10"))
 LLM_TOTAL_TIMEOUT = int(os.environ.get("LLM_TOTAL_TIMEOUT", "15"))

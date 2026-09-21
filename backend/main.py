@@ -46,6 +46,14 @@ except Exception as e:
     logger.warning("Failed to initialize DocumentService: %s", e)
     doc_service = None
 
+from config import ENABLE_INDEX_BLOOM
+if ENABLE_INDEX_BLOOM:
+    try:
+        from services.document_index_registry import rebuild_index_bloom
+        rebuild_index_bloom()
+    except Exception as e:
+        logger.warning("Bloom startup rebuild failed: %s; continuing without Bloom fast-path", e)
+
 # ====== EXTERNAL BLUEPRINTS (quiz, flashcard, summarize) ======
 try:
     from features.quiz import quiz_bp, QuizGenerator

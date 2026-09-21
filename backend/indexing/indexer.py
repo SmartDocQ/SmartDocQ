@@ -46,12 +46,26 @@ logger = logging.getLogger(__name__)
 
 def has_index(doc_id: str) -> bool:
     """Check if the document has a valid active index (versioned or legacy fallback)."""
+    doc_id = (doc_id or "").strip()
+    if not doc_id:
+        return False
+
+    from config import ENABLE_INDEX_BLOOM
+    if ENABLE_INDEX_BLOOM:
+        from services.document_index_registry import indexed_doc_filter
+        if indexed_doc_filter.is_ready():
+            if not indexed_doc_filter.maybe_contains(doc_id):
+                return False
+
     from services.vector_versioning import get_index_state, has_legacy_chunks
     state = get_index_state(doc_id)
     active_version = state.get("activeVersion")
     if active_version:
         return True
     return has_legacy_chunks(doc_id)
+
+
+
 
 def _push_chunks_to_node(doc_id: str, filename: str, chunk_records: list, index_version: str, tables: list | None = None):
     if not chunk_records:
@@ -296,6 +310,11 @@ def index_bytes(
         if not activate_index_version(doc_id, index_version):
             raise IndexBuildError("Index activation failed")
 
+        from config import ENABLE_INDEX_BLOOM
+        if ENABLE_INDEX_BLOOM:
+            from services.document_index_registry import indexed_doc_filter
+            indexed_doc_filter.add(doc_id)
+
         from services.vector_versioning import get_index_state
         state = get_index_state(doc_id)
         active = state.get("activeVersion")
@@ -347,6 +366,13 @@ def index_text(doc_id: str, filename: str, text: str, file_hash: str | None = No
 
         if not activate_index_version(doc_id, index_version):
             raise IndexBuildError("Index activation failed")
+
+        from config import ENABLE_INDEX_BLOOM
+        if ENABLE_INDEX_BLOOM:
+            from services.document_index_registry import indexed_doc_filter
+            indexed_doc_filter.add(doc_id)
+
+
 
         from services.vector_versioning import get_index_state
         state = get_index_state(doc_id)

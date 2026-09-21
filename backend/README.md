@@ -1,26 +1,50 @@
-# SmartDoc AI Service (Python/Flask backend)
+# SmartDoc AI Service (Python / Flask Backend)
+
+This service provides document extraction, token-aware chunking, hybrid vector/lexical indexing, context retrieval, LLM task routing, and document intelligence features for SmartDocQ.
+
+---
 
 ## Environment Variables
 
-Copy `.env.example` to `.env` and configure:
+### Required
+- `SERVICE_TOKEN` — Shared secret used to authenticate server-to-server HTTP requests from the Node.js backend.
+- `NODE_BASE_URL` — Base URL of the Node.js API for document downloads, metadata access, and callbacks (default: `http://localhost:5000`).
+- `GEMINI_API_KEY` — Google Generative AI API key.
+- `GROQ_API_KEY` — Groq API key.
+- `CEREBRAS_API_KEY` — Cerebras API key.
 
-- `PORT` — Port for the AI service (default: `5001`)
-- `FRONTEND_ORIGINS` — Comma-separated CORS allowlist (e.g., `http://localhost:3000,https://your-frontend.vercel.app`)
-- `NODE_BASE_URL` — Base URL of the trusted Node.js API used for authenticated document downloads, metadata access, and indexing callbacks.
-- `SERVICE_TOKEN` — Shared secret used to authenticate all server-to-server communication between the Node.js backend and the Flask AI service. This value must be identical in both services.
-- `GEMINI_API_KEY` — Google Generative AI API key
-- `GROQ_API_KEY` — Groq API key
-- `CEREBRAS_API_KEY` — Cerebras API key
-- `TEXT_MODEL` — Optional override for the Gemini text model (default: `models/gemini-2.5-flash`)
-- `GROQ_MODEL` — Groq primary model (default: `openai/gpt-oss-120b`)
-- `CEREBRAS_PRIMARY_MODEL` — Cerebras primary model (default: `llama-3.3-70b`)
-- `CEREBRAS_FALLBACK_MODEL` — Cerebras fallback model (default: `llama3.1-8b`)
-- `EMBED_MODEL` — Optional override for the embedding model (default: `models/gemini-embedding-2`)
-- `INDEX_BATCH_SIZE` — Optional batch size for Chroma chunk upserts (default: `64`)
-- `JAILBREAK_THRESHOLD` — Optional weighted threshold for jailbreak detection (default: `3`)
-- `BM25_CACHE_TTL` — Optional BM25 cache lifetime in seconds (recommended: 86400)
+### Models
+- `TEXT_MODEL` — Gemini text generation model (default: `models/gemini-2.5-flash`).
+- `EMBED_MODEL` — Gemini embedding model (default: `models/gemini-embedding-2`).
+- `GROQ_MODEL` — Groq primary model identifier (configured constant: `openai/gpt-oss-120b`).
+- `CEREBRAS_PRIMARY_MODEL` — Cerebras primary model identifier (configured constant: `llama-3.3-70b`).
+- `CEREBRAS_FALLBACK_MODEL` — Cerebras fallback model identifier (configured constant: `llama3.1-8b`).
+- `RERANKER_MODEL` — Experimental cross-encoder reranker model (default: `BAAI/bge-reranker-base`).
 
-## Installation & Run
+### Network & Request Limits
+- `PORT` — Port for the Flask AI service (default: `5001`).
+- `FRONTEND_ORIGINS` — Comma-separated CORS allowlist (default: `http://localhost:3000`).
+- `MAX_UPLOAD_SIZE_MB` — Maximum document upload size limit in MB (default: `15`).
+- `NODE_FETCH_TIMEOUT` — Timeout for HTTP requests to Node.js backend in seconds (default: `45`).
+
+### LLM Timeouts
+- `LLM_PRIMARY_TIMEOUT` — Timeout per primary provider attempt in seconds (default: `10`).
+- `LLM_FALLBACK_TIMEOUT` — Timeout per fallback provider attempt in seconds (default: `10`).
+- `LLM_TOTAL_TIMEOUT` — Shared global wall-clock deadline across all LLM attempts in seconds (default: `15`).
+
+### Retrieval & Indexing
+- `INDEX_BATCH_SIZE` — Batch size for Chroma chunk upserts (default: `64`).
+- `CHROMA_DB_PATH` — Directory path for persistent Chroma vector storage (default: `chroma_db`).
+- `BM25_CACHE_TTL` — Cache TTL in seconds for in-memory BM25 index instances (default: `10800` / 3 hours).
+- `ENABLE_INDEX_BLOOM` — Feature flag to enable the process-local Counting Bloom filter (default: `false`).
+
+### Security & Debug
+- `JAILBREAK_THRESHOLD` — Weighted risk score threshold for prompt safety validation (default: `3`).
+- `FLASK_DEBUG` — Flask debug mode flag (default: `false`).
+
+---
+
+## Installation & Execution
 
 Create and activate a virtual environment, then install dependencies:
 
@@ -36,373 +60,250 @@ python main.py
 
 The service runs on port `5001` by default.
 
+---
+
+## Backend Structure
+
+- `routes/` — HTTP route handlers.
+- `features/` — Quiz, flashcard, summarization, and table-edit services.
+- `services/` — Retrieval, BM25, embeddings, LLM routing, versioning, and document registry.
+- `indexing/` — Extraction, chunking, embedding preparation, and indexing pipeline.
+- `db/` — ChromaDB adapter.
+- `utils/` — PDF layout extraction, security, formatting, and table utilities.
+- `tests/` — Automated unit and integration test suite.
+- `benchmark/` — Retrieval and performance benchmarking scripts and reports.
+
+---
+
 ## Dependencies
 
 - **PyMuPDF4LLM / PyMuPDF (fitz)**: Multi-format PDF layout parser converting PDF text and tables to Markdown.
 - **PyPDF2**: Fallback PDF text parser.
-- **tiktoken**: Fast byte pair encoding (BPE) tokenizer used for chunk bounds estimation.
-- **rank-bm25**: Lexical BM25 indexing and querying (wrapped in version-isolated cache with automatic TTL invalidation).
-- **ChromaDB**: High-performance semantic vector database.
-- **groq**: Groq Cloud Python SDK for LLM generation.
-- **cerebras-cloud-sdk**: Cerebras Cloud Python SDK for LLM generation.
+- **tiktoken**: Byte Pair Encoding (BPE) tokenizer used for token-aware chunk bounds.
+- **rank-bm25**: Lexical BM25 indexing and querying with version-isolated caching.
+- **ChromaDB**: Vector storage for document embeddings and metadata.
+- **groq**: Groq Cloud Python SDK.
+- **cerebras-cloud-sdk**: Cerebras Cloud Python SDK.
 - **google-generativeai**: Google Gemini SDK.
-
-## Health Check
-
-- `GET /healthz` → `{ "status": "ok" }`
-  - **Public endpoint**. Does not require `SERVICE_TOKEN`.
-- `GET /` → `{ "service": "SmartDocQ Flask", "status": "ok" }`
-  - **Public endpoint**. Does not require `SERVICE_TOKEN`.
 
 ---
 
-## MODEL-AGNOSTIC LLM ARCHITECTURE
+## Service Authentication & Health Check
 
-SmartDocQ uses a model-agnostic LLM routing architecture that decouples application features from specific LLM providers and models.
+### Health Endpoints (Public)
+- `GET /healthz` → `{ "status": "ok" }`
+- `GET /` → `{ "service": "SmartDocQ Flask", "status": "ok" }`
 
-Feature services (`TextSummarizer`, `QuizGenerator`, `FlashcardGenerator`, QA endpoint) do not directly depend on Gemini, Groq, or Cerebras SDKs. They request text generation through a centralized LLM Router using a logical task parameter such as `qa`, `general_qa`, `summarization`, `quiz`, `flashcards`, or `conversation`.
+### Service Authentication
+Protected Flask routes require the `x-service-token` HTTP header.
+- `/healthz` and `/` are public endpoints.
+- Other routes are denied unless the provided header matches `SERVICE_TOKEN`.
+- Token comparison uses constant-time `hmac.compare_digest` to prevent timing side-channel attacks.
+- `x-user-id` may be forwarded by the Node service for request logging and audit tracking.
 
-```mermaid
-graph TD
-    Feature["Feature Service<br/>(Summarize / Quiz / Flashcard / QA)"] --> Router["LLM Router"]
-    Router --> Policy["Task Policy"]
-    Policy --> Provider["Provider / Model"]
-    Provider --> Gen["Generation"]
-```
+---
 
-### Key Architectural Concepts
-- **Task-aware Routing**: Each logical task resolves to a prioritized provider chain optimized for its specific latency and quality requirements.
-- **Provider Fallback**: If the primary provider fails due to a retryable error (rate limits, timeouts, server errors), the router transparently fails over to the next provider in the chain.
-- **Model-level Fallback**: Cerebras retries with its configured fallback model before the router proceeds to the next provider.
-- **Error Classification**: Distinguishes retryable errors (429 Rate Limit, 5xx Server Errors, Timeouts, Network issues) from non-retryable errors (401 Authentication, 400 Bad Request) to prevent wasteful retries.
-- **Normalized Router Response**: Returns the provider, model, fallback usage flag, and fallback reason in a consistent response structure for logging and observability.
-- **Shared Global Latency Deadline**: Manages floating-point timeout allocation across provider attempts without resetting attempt timeouts.
+## LLM Routing
 
-### LLM Routing Policy
+Feature services do not call provider SDKs directly. They request generation through the centralized LLM Router using logical tasks such as `qa`, `general_qa`, `summarization`, `quiz`, `flashcards`, and `conversation`.
 
 ```mermaid
 graph TD
-    Router["LLM Router<br/>(Task-aware routing)"]
-    Router --> Gemini["Gemini<br/>(Gemini 2.5 Flash)"]
-    Router --> Groq["Groq<br/>(GPT-OSS 120B)<br/>↓ fallback<br/>(GPT-OSS 20B)"]
-    Router --> Cerebras["Cerebras<br/>(Llama 3.3 70B)<br/>↓ fallback<br/>(Llama 3.1 8B)"]
+    Feature[Feature Request] --> Router[LLM Router]
+    Router --> Gemini[Primary Provider: Gemini 2.5 Flash]
+    Gemini -- Timeout / Error --> Groq[Fallback Provider: Groq / GPT-OSS 120B]
+    Groq -- Timeout / Error --> Cerebras[Resilience Provider: Cerebras Llama 3.3]
+    Cerebras -- Primary Failure --> CerebrasFallback[Cerebras Fallback Model]
 ```
 
-- `qa` $\rightarrow$ Gemini $\rightarrow$ Groq $\rightarrow$ Cerebras
-- `general_qa` $\rightarrow$ Groq $\rightarrow$ Gemini $\rightarrow$ Cerebras
-- `summarization` $\rightarrow$ Gemini $\rightarrow$ Groq $\rightarrow$ Cerebras
-- `quiz` $\rightarrow$ Groq $\rightarrow$ Gemini $\rightarrow$ Cerebras
-- `flashcards` $\rightarrow$ Groq $\rightarrow$ Gemini $\rightarrow$ Cerebras
-- `conversation` $\rightarrow$ Groq $\rightarrow$ Gemini $\rightarrow$ Cerebras
+### Task Routing Policy
+
+| Task | Provider Fallback Chain |
+| :--- | :--- |
+| `qa` | Gemini 2.5 Flash → Groq GPT-OSS 120B → Cerebras Llama 3.3 |
+| `general_qa` | Groq GPT-OSS 120B → Gemini 2.5 Flash → Cerebras Llama 3.3 |
+| `summarization` | Gemini 2.5 Flash → Groq GPT-OSS 120B → Cerebras Llama 3.3 |
+| `quiz` | Groq GPT-OSS 120B → Gemini 2.5 Flash → Cerebras Llama 3.3 |
+| `flashcards` | Groq GPT-OSS 120B → Gemini 2.5 Flash → Cerebras Llama 3.3 |
+| `conversation` | Groq GPT-OSS 120B → Gemini 2.5 Flash → Cerebras Llama 3.3 |
+
+The router manages:
+- Task-specific provider ordering.
+- Retryable error classification (429 Rate Limit, 5xx Server Error, network timeouts).
+- Provider fallback (e.g., Gemini → Groq → Cerebras).
+- Cerebras model-level fallback (primary model → fallback model).
+- Normalized generation responses with fallback observability metadata.
 
 ### LLM Latency Budget
 
-The LLM router enforces a shared global wall-clock deadline:
-
+The router uses a shared 15-second wall-clock deadline:
 - **Primary attempt**: up to 10 seconds
 - **Fallback attempt**: up to 10 seconds
-- **Total LLM budget**: maximum 15 seconds
+- **Total routing budget**: 15 seconds
 
-Fallback attempts do not receive a fresh 15-second budget. Each attempt receives only the remaining time within the global deadline.
-
----
-
-## RESILIENT PDF EXTRACTION
-
-PDF processing is critical to a document RAG system. SmartDocQ implements a **Three-tier PDF Extraction Chain** to ensure processing never fails entirely:
-
-1. **Tier 1: PyMuPDF4LLM** (Default) — Extracts text and tables, converting them to rich Markdown structured page-by-page.
-2. **Tier 2: PyMuPDF Classic** (Fallback 1) — Used if Tier 1 conversions encounter layout errors, converting raw text page-by-page.
-3. **Tier 3: PyPDF2 Reader** (Fallback 2) — Final backup library returning raw unformatted page text if Fitz modules fail to load.
+Fallback attempts receive only the remaining time within the global deadline.
 
 ---
 
-## INDEXING PIPELINE & FEATURES
+## PDF Extraction Chain
 
-SmartDocQ processes incoming uploads page-by-page through a structured Markdown indexing pipeline:
+PDF extraction uses a three-tier fallback chain:
+
+1. **PyMuPDF4LLM** (Default) — Converts pages and tables into structured Markdown.
+2. **PyMuPDF Classic** (Fallback 1) — Plain text extraction if layout parsing fails.
+3. **PyPDF2** (Fallback 2) — Backup text extraction if Fitz modules fail to load.
+
+---
+
+## Indexing & Retrieval Architecture
+
+SmartDocQ processes uploads into token-aware Markdown chunks indexed into ChromaDB and BM25.
 
 ```mermaid
 graph TD
-    Upload["Document Upload"] --> Ext["Three-Tier Extraction Chain"]
-    Ext --> Normal["Markdown Normalization"]
-    Normal --> Cleanup["Page Artifact Removal"]
-    Cleanup --> Parse["Extensible Block Parsing"]
-    Parse --> Section["Heading-aware Section Extraction"]
-    Section --> Chunker["Token-aware Block Packing"]
-    Chunker --> Headers["Contextual Embedding Headers"]
-    Headers --> Embed["Gemini Embeddings\n(gemini-embedding-2)"]
-    Embed --> Index["ChromaDB + BM25 Index"]
+    Upload[Document Upload] --> Extraction[Three-Tier Extraction Chain]
+    Extraction --> Normalization[Markdown Normalization & Artifact Removal]
+    Normalization --> Chunker[Token-Aware Section & Block Chunking]
+    Chunker --> Context[Contextual Header Prepending]
+    Context --> Embed[Gemini Embedding]
+    Embed --> Chroma[Chroma Vector Storage]
+    Chunker --> BM25[BM25 Lexical Storage]
 ```
 
-### Key Indexing Features
-- **Markdown Normalization**: standardizes bullets, cleans fences, reduces extra lines, and merges wrapped lines.
-- **Page Artifact Removal**: strips running headers/footers and automatic page numbers before parsing.
-- **Heading-aware Section Extraction**: dynamically traces heading hierarchies and subsection paths.
-- **Extensible Block Parsing**: supports paragraphs, headings, tables, lists, blockquotes, code blocks, HTML blocks, and display equations.
-- **Token-aware Block Packing**: splits documents on natural Markdown syntax boundaries rather than arbitrary characters.
-- **Token-aware Chunk Sizing**: Packs content up to standard token boundaries dynamically estimated using `tiktoken`.
-- **Dedicated Table Chunks**: keeps tables isolated, splitting large tables by row groups and repeating column headers on every sub-chunk.
-- **Dedicated Code Chunks**: keeps code blocks isolated to prevent Markdown code fence corruption.
-- **Dedicated HTML Blocks**: preserves HTML blocks as isolated units.
-- **Dedicated Equation Blocks**: preserves display equations as isolated units.
-- **Contextual Embedding Headers**: prepends document title, section, subsection, and page ranges to query vector generation.
-- **Rich Metadata Store**: records all structural page coordinates, counts, hashes, and pipeline versions.
-- **Automatic Duplicate Removal**: filters out repeated noise blocks.
-- **Automatic Version Validation**: enforces Vector index compatibility checks.
-- **Dual Spreadsheet Representations**: spreadsheets are indexed both as structured table chunks and narrative paragraph chunks to improve retrieval quality.
+### Indexing Features
 
----
-
-## HYBRID RETRIEVAL WORKFLOW
-
-The SmartDocQ hybrid retrieval engine fuses semantic similarity results with lexical index matching, incorporating table-aware relevance weighting and dynamic metadata validation checks:
-
-```mermaid
-graph TD
-    %% Styles
-    classDef query fill:#2d3748,stroke:#4a5568,stroke-width:2px,color:#fff;
-    classDef process fill:#1a202c,stroke:#2d3748,stroke-width:1px,color:#cbd5e0;
-    classDef fusion fill:#2c7a7b,stroke:#319795,stroke-width:2px,color:#fff;
-    classDef output fill:#276749,stroke:#2f855a,stroke-width:2px,color:#fff;
-
-    Query["User Query"]:::query
-
-    subgraph Validation_Subsystem ["Metadata & Version Validation"]
-        direction TB
-        MetaCheck["Metadata Cache Lookup<br/>(Fast Cached TTL Fetch)"]:::process
-        VersionCheck["Version Validation<br/>(Pipeline Version / Model Check)"]:::process
-        Reindex["Atomic Shadow Indexing<br/>(Trigger on Version/Hash Mismatch)"]:::process
-    end
-
-    subgraph Retrieval_Subsystem ["Retrieval Subsystem"]
-        direction TB
-        Embed["Query Embedding<br/>(gemini-embedding-2)"]:::process
-        VectorSearch["Versioned Chroma Retrieval<br/>(Active Version Filter)"]:::process
-        BM25Search["Versioned BM25 Search<br/>(Lazy Rebuilding & TTL Cache)"]:::process
-    end
-
-    subgraph Ranking_Subsystem ["Ranking & Fusion Subsystem"]
-        direction TB
-        RRF["Reciprocal Rank Fusion (RRF)<br/>(Combines Vector & Lexical Ranks)"]:::fusion
-        Refine["Score Refinement<br/>(Similarity Normalization)"]:::process
-        TableBoost["Table-Aware Reranking<br/>(Structured Data Boost)"]:::process
-    end
-
-    subgraph Generation_Subsystem ["Generation Subsystem"]
-        direction TB
-        Context["Top Chunks Context"]:::process
-        Router["LLM Router<br/>(Task-aware Provider Selection)"]:::process
-        Providers["Gemini / Groq / Cerebras<br/>(Fallback if retryable failure)"]:::output
-    end
-
-    %% Flow Connections
-    Query --> MetaCheck
-    MetaCheck --> VersionCheck
-    VersionCheck -->|Mismatch| Reindex
-    VersionCheck -->|Valid| Embed
-    Query --> BM25Search
-    
-    Embed --> VectorSearch
-    VectorSearch --> RRF
-    BM25Search --> RRF
-    
-    RRF --> Refine
-    Refine --> TableBoost
-    TableBoost --> Context
-    Context --> Router
-    Router --> Providers
-```
+- Markdown normalization and page-artifact removal.
+- Heading-aware section extraction.
+- Token-aware chunk sizing with tiktoken.
+- Dedicated table, code, HTML, and equation chunks.
+- Structural metadata (document ID, section path, page range, hashes, versioning).
+- Dual-representation spreadsheet indexing (table chunks + narrative summaries).
 
 ### Contextual Chunk Headers
 
-Before sending chunks to the embedding model, SmartDocQ prepends a structural context block to the embedding input:
+Before vector generation, a structural context block is prepended to the text sent to `gemini-embedding-2`:
 ```text
 Document: [filename]
 Section: [H1 Section Title]
 Subsection: [H2 > H3 Subsection Path]
 Pages: [Page / Page Range]
 ```
-This contextual prepending gives the embedding model additional document structure, which can help retrieval when page-level chunks lack direct textual keywords. In contrast, ChromaDB stores clean chunk text as documents to prevent lexical BM25 search pollution.
+ChromaDB stores the clean chunk text without prepended headers to prevent polluting lexical BM25 search matching.
 
----
+### Hybrid Retrieval & BGE Reranker Evaluation
 
-## PERFORMANCE INSTRUMENTATION
-
-Internal retrieval stages are individually timed, including:
-- embedding generation
-- vector retrieval
-- BM25 retrieval
-- reciprocal rank fusion
-- LLM generation
-- total request latency
-
-These measurements are used for diagnostics and performance tuning.
-
----
-
-## SECURITY FEATURES
-
-- **Server-to-Server Authentication**: All AI endpoints require a valid shared `SERVICE_TOKEN`. Browser clients cannot invoke protected Flask APIs directly.
-- **Constant-Time Token Verification**: Incoming service tokens are validated using `hmac.compare_digest` to mitigate timing attacks.
-- **Request Authorization**: Protected AI endpoints require authenticated server-to-server requests from the Node.js backend.
-- **Audit Identity Forwarding**: Authenticated user IDs are forwarded through the `x-user-id` header for structured logging and future auditing.
-- **Secure Temporary File Handling**: Word document conversion and preview operations sanitize user-supplied filenames and use randomized UUID-based temporary filenames with validated extensions, preventing path traversal, arbitrary file writes, and filename collisions.
-- Rejects common jailbreak and prompt-manipulation attempts in user questions before retrieval and LLM invocation.
-- Treats retrieved document context as untrusted data using guarded `<CONTEXT>` delimiters to reduce document-based prompt injection.
-- Detects sensitive data including PAN, Aadhaar, phone numbers, credit cards, emails, and SSN-like patterns.
-- Validates credit cards with the Luhn algorithm and Aadhaar numbers with the Verhoeff checksum algorithm to reduce false positives.
-- Applies India-focused phone number heuristics for improved detection accuracy.
-- Requires explicit user consent before processing documents containing sensitive information.
-- Internal service requests authenticated using a shared `SERVICE_TOKEN` are trusted server-to-server communications and bypass browser-oriented CSRF protections.
-- **Private Network Deployment (Recommended)**: The `SERVICE_TOKEN` provides application-layer defense-in-depth. In production environments, deploy the Flask AI service on a private internal network (VPC / internal container network), accessible only from the Node.js API gateway (or other explicitly authorized internal services).
-
----
-
-## INDEX LIFECYCLE MANAGEMENT
-
-SmartDocQ tracks detailed version and configuration metadata for every chunk stored in ChromaDB:
-
-- `embedding_model` — embedding model used to generate the vector (e.g., `models/gemini-embedding-2`)
-- `pipeline_version` — overall indexing pipeline generation (extraction, parsing, embedding, storage flow)
-- `chunking_version` — chunking algorithm generation and chunk layout schema version
-- `indexed_at` — UTC timestamp when the chunk was indexed
-- `file_hash` — source document content hash used to detect document changes
-
-Before retrieval, the system checks whether stored vectors are compatible with the current configuration.
-
-### Atomic Shadow Indexing Behavior
-
-- **Embedding model changes**: Vectors and BM25 indexes are built in isolated shadow generations. After validation succeeds, a compare-and-swap (CAS) activation atomically promotes the new generation while preserving the previous version for rollback. Failed builds never interrupt active retrieval.
-- **Pipeline version changes** trigger background reindexing while continuing to serve the existing index.
-- **Source document content changes** (file hash mismatch) trigger automatic reindexing.
-- **Legacy chunks** without version metadata remain backward compatible and trigger background migration reindexing.
-
-### Background Recovery
-
-To improve resilience, interrupted indexing jobs are automatically recovered.
-
-Documents that remain in `queued` or `indexing` beyond the configured timeout are detected by a watchdog and safely marked as failed using optimistic version checks, preventing stale processing states and duplicate indexing.
-
----
-
-## TESTING
-
-Note: `SERVICE_TOKEN` is required to import some modules; set it in your environment (a dummy value is fine for unit tests).
-
-Run the full automated unit test suite:
-
-```bash
-python -m pytest
+```mermaid
+graph TD
+    Query[User Question] --> Validation[Validation & Metadata Check]
+    Validation --> Dense[Vector Search - ChromaDB]
+    Validation --> Lexical[BM25 Lexical Search]
+    Dense --> RRF[Reciprocal Rank Fusion - k=60]
+    Lexical --> RRF
+    RRF --> Refinement[Score Refinement & Table Boosting]
+    Refinement --> Context[Context Assembly]
+    Context --> LLM[LLM Generation Router]
 ```
 
-Or run specific test modules in verbose mode:
+The retrieval pipeline combines dense vector search in ChromaDB with lexical BM25 search using Reciprocal Rank Fusion (RRF, $k=60$).
+
+The BEIR SciFact benchmark showed that the evaluated BGE cross-encoder reranker (`BAAI/bge-reranker-base`) reduced nDCG@5, MRR@5, and Recall@5 while substantially increasing retrieval latency. Reranking is therefore disabled by default.
+
+### Index-State Bloom Filter
+
+SmartDocQ uses a process-local Counting Bloom filter to reject document IDs that are definitely not indexed without performing an authoritative index-state lookup.
+
+```mermaid
+graph TD
+    Start[Check Document ID] --> Filter{Is in Bloom Filter?}
+    Filter -- NO --> Reject[Return False - Fast Rejection]
+    Filter -- YES --> Auth[Check Authoritative Index - Chroma Metadata]
+```
+
+- **Bloom-negative**: Returns `False` immediately (fast non-authoritative rejection).
+- **Bloom-positive**: Triggers the authoritative index-state check (Bloom positives never authorize document existence).
+- Maintains exact set membership tracking (`_members: Set[str]`) for idempotent updates and safe decrements on deletion.
+- Rebuilt from persistent Chroma metadata at startup when enabled (`ENABLE_INDEX_BLOOM`).
+- Bypassed when disabled (`ENABLE_INDEX_BLOOM = False` by default in development) or if uninitialized.
+
+The benchmark is documented separately in the [benchmark directory](benchmark/README.md).
+
+---
+
+## Incremental Table Cell Editing
+
+Spreadsheet edits (CSV/XLSX) update affected table and paragraph chunks without rebuilding the entire document index.
+
+- **Hash-based embedding reuse**: Computes SHA-256 block signatures to avoid re-embedding unchanged table chunks.
+- **Cross-store synchronization**: Updates ChromaDB, BM25, and MongoDB in a defined order. The workflow does not use a distributed transaction.
+- **Audit logging**: Records cell-level modification entries (`EditHistory` schema).
+
+---
+
+## Version Validation & Shadow Reindexing
+
+Stored chunks include:
+- `embedding_model`
+- `pipeline_version`
+- `chunking_version`
+- `file_hash`
+- `indexed_at`
+
+Configuration or source changes trigger reindexing.
+
+New vector/BM25 generations are built separately from the active generation. A successful compare-and-swap (CAS) activation promotes the new generation; failed builds leave the active generation unchanged.
+
+Legacy chunks without current version metadata can be migrated through the background reindexing workflow.
+
+A watchdog detects stale `queued` or `indexing` jobs and recovers them using optimistic version checks.
+
+---
+
+## Testing
+
+Note: `SERVICE_TOKEN` is required to import route modules; set a dummy value in your shell for unit testing.
+
+Run the test suite:
 
 ```bash
-# Run LLM router unit tests (task validation, error classification, provider/model fallbacks, timeouts)
+python -m pytest tests
+```
+
+Specific test modules:
+
+```bash
+# LLM Router tests
 python -m pytest tests/test_llm_router.py -v
 
-# Run chunking unit tests (blocks, tables, code splitting, overlap)
+# Indexing & chunking tests
 python -m pytest tests/test_chunking.py -v
-
-# Run indexing pipeline unit tests (PDF extraction chain fallbacks, metadata)
 python -m pytest tests/test_indexer.py -v
 
-# Run retrieval unit tests (hybrid search, BM25, metadata caching)
+# Retrieval & Bloom filter tests
 python -m pytest tests/test_retrieval_service.py -v
+python -m pytest tests/test_document_index_registry.py -v
 
-# Run DocumentService unit tests (context retrieval, multi-format parsing)
-python -m pytest tests/test_document_service.py -v
-
-# Run QuizGenerator unit tests (single-pass JSON quiz generation via router mock)
+# Feature tests (quiz, flashcards, summarization, table edit)
 python -m pytest tests/test_quiz_generator.py -v
-
-# Run FlashcardGenerator unit tests (normalized deduplicated flashcards via router mock)
 python -m pytest tests/test_flashcard_generator.py -v
-
-# Run TextSummarizer unit tests (two-stage chunk bounds, style/boolean validation via router mock)
 python -m pytest tests/test_summarizer.py -v
-
-# Run TableEditor unit tests (incremental cell sync, O(1) BM25 lookup maps)
 python -m pytest tests/test_table_edit.py -v
 
-# Run security checks tests (sensitive detectors, Aadhaar, CC verification)
+# Security & Vector versioning tests
 python -m pytest tests/test_security.py -v
-
-# Run vector store versioning and lifecycle tests
 python -m pytest tests/test_vector_versioning.py -v
-
-# Run embedding formatting tests (asymmetric query/document embeddings)
-python -m pytest tests/test_embedding_service.py -v
 ```
 
-### Coverage Highlights (LLM Router Tests)
-The LLM router test suite covers:
-- task validation
-- provider selection
-- retryable/non-retryable error classification
-- provider-level fallback
-- Cerebras model-level fallback
-- JSON response configuration
-- timeout budget preservation
-- authentication failure handling
-
 ---
 
-## INDEXING & CORE SERVICES ARCHITECTURE
+## Benchmarks
 
-- `llm_router.py` — Centralized task-aware multi-provider LLM routing, fallback handling, error classification, timeout budgeting, and normalized generation responses
-- `gemini_client.py` — Gemini SDK/client configuration and provider-specific setup
-- `embedding_service.py` — Gemini embedding generation; kept separate from LLM generation routing
-- `indexer.py` — Main indexing orchestration and lifecycle management
-- `pipeline.py` — Structured extraction, embedding preparation, and shadow index construction
-- `chunking.py` — Markdown normalization, parsing, section detection, and token-aware chunking
-- `document_service.py` — `DocumentService` for context retrieval and multi-format text parsing
-- `background.py` — Background indexing scheduler and recovery workflow
-- `features/quiz.py` — `QuizGenerator` service for single-pass document quiz generation via LLM router
-- `features/flashcard.py` — `FlashcardGenerator` service with normalized front deduplication via LLM router
-- `features/summarize.py` — `TextSummarizer` Map-Reduce service with guaranteed chunk bounds ($\le 1600$ chars) via LLM router
-- `features/table_edit.py` — `TableEditor` incremental cell synchronization service with $O(1)$ BM25 cache lookup maps
+The backend contains separate benchmarks for:
 
----
+- **PDF extraction** — compares extraction libraries using extraction time, resource usage, page coverage, and structural output.
+- **Information retrieval** — compares Hybrid Dense + BM25 + RRF against the experimental BGE reranker on BEIR SciFact.
+- **Index-state Bloom filter** — measures the process-local Counting Bloom filter's lookup latency, workload break-even behavior, and observed false-positive rate.
 
-## INCREMENTAL TABLE CELL EDITING & CONSISTENCY MODEL
-
-SmartDocQ supports incremental editing for CSV and Excel (XLSX) documents without rebuilding the entire document index.
-
-### Editing Pipeline
-
-A spreadsheet edit follows this synchronization workflow:
-
-1. Validate ownership and optimistic version (`__v`) in Node.js.
-2. Apply cell mutations to the workbook in memory.
-3. Regenerate the modified workbook bytes.
-4. Incrementally update only affected table chunks.
-5. Rebuild paragraph chunks only when paragraph boundaries change; otherwise update them in place.
-6. Skip unchanged embeddings using chunk hash comparison.
-7. Update ChromaDB vectors.
-8. Update the in-memory BM25 index with debounced rebuilding.
-9. Persist workbook changes, audit history, and MongoDB `DocChunk` records.
-
-### Consistency Model
-
-The system uses best-effort consistency rather than distributed transactions.
-
-The synchronization order is:
-
-- ChromaDB
-- BM25
-- MongoDB
-
-If persistence fails after successful vector synchronization, the request returns HTTP `500`. Retry logic is applied to audit history and `DocChunk` persistence, but operators should rerun synchronization if consistency cannot be restored automatically.
-
-### Engineering Highlights (Spreadsheet Editing)
-
-The incremental spreadsheet editing feature implements several advanced engineering workflows to ensure low-latency updates and cross-system consistency:
-- **Incremental Re-indexing**: Avoids full document re-indexing on spreadsheet cell mutations by targeting and refreshing only the affected content chunks.
-- **Hash-based Embedding Reuse**: Computes SHA-256 signatures of modified blocks to prevent redundant Gemini embedding generation API calls.
-- **Optimistic Concurrency Control**: Uses Mongoose optimistic versioning (`__v`) to protect cell mutations and prevent concurrent write collisions.
-- **Cross-Store Synchronization**: Manages vector (ChromaDB), lexical (BM25), and database (MongoDB Mongoose models) stores in a synchronized transactional order.
-- **Audit Logging**: Maintains a precise cell-level modification history log via the `EditHistory` schema, capturing old values, new values, editor details, and checksums.
-- **Retry-based Persistence**: Includes single-retry error handling for critical asynchronous writes, such as audit logs and chunk text updates.
-- **Split-Strategy Chunk Coordination**: Dynamically updates table chunks in-place, while paragraph chunks are updated or regenerated based on boundary shift conditions.
-- **Cache Consistency**: Performs debounced lexical cache updates, keeping in-memory BM25 caches consistent with updated vector databases.
+Detailed benchmark reports:
+- [Information Retrieval Report](benchmark/retrieval_benchmark.md)
+- [Index Bloom Filter Report](benchmark/bloom_benchmark.md)
+- [Benchmarking Module Overview](benchmark/README.md)

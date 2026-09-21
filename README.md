@@ -2,51 +2,37 @@
 
 **Live Demo:** [https://smartdocq.vercel.app](https://smartdocq.vercel.app)
 
-In today's information-driven world, efficiently extracting insights from documents is crucial for academic success and professional productivity. The growing volume of digital documents presents challenges in comprehension, knowledge retention, and information retrieval. SmartDocQ is an intelligent document processing platform that leverages advanced AI technology to transform how users interact with their documents.
-
-## Overview
-
-SmartDocQ is a full-stack AI document intelligence platform that combines structured document processing with a Hybrid Retrieval-Augmented Generation (Hybrid RAG) architecture. By integrating semantic vector search, BM25 lexical retrieval, and Reciprocal Rank Fusion (RRF), it delivers accurate, context-aware answers across both narrative documents and structured tabular data. The platform uses a model-agnostic LLM routing layer that decouples application features from individual AI providers and supports task-aware provider selection with automatic fallback.
+SmartDocQ is a full-stack document intelligence platform for uploading, indexing, searching, editing, and querying documents. It combines semantic vector retrieval, BM25 lexical search, and Reciprocal Rank Fusion (RRF), with a task-aware LLM routing layer for generation and provider fallback.
 
 ## Features
 
 ### Core AI Features
 - **AI-Powered Chat**: Hybrid RAG-based question answering using Vector Search + BM25 + RRF Fusion.
-- **Interactive Spreadsheet Editing**: Edit CSV and Excel (XLSX) documents directly in the browser. SmartDocQ incrementally synchronizes only affected table and paragraph chunks, keeping AI responses consistent without rebuilding the entire document index.
+- **Interactive Spreadsheet Editing**: Edit CSV and Excel (XLSX) documents directly in the browser. SmartDocQ incrementally synchronizes affected table and paragraph chunks without rebuilding the entire document index.
 - **Quiz Generation**: Automatic creation of multiple-choice, true/false, and short-answer questions from document content.
 - **Flashcard Creation**: Smart extraction of key concepts and definitions for effective learning and revision.
 - **Text Summarization**: Concise summaries of document content for quick comprehension.
 
 ### Indexing & Retrieval
-- **Document Upload & Processing**: Support for PDF, DOC, DOCX, TXT, CSV, and XLSX files with intelligent text extraction and preprocessing.
-- **Advanced PDF Indexing Pipeline**:
-  - **PyMuPDF4LLM Markdown extraction** for high-quality structure conversion.
-  - **Heading-aware section detection** (traces H1-H5 hierarchy).
-  - **Block-aware token chunking** preserving list, code, table, and paragraph bounds.
-  - **Contextual document embeddings**: Prepend document title, hierarchical headings, and page ranges before embedding, improving retrieval quality while preserving the original chunk text for generation.
-  - **Rich metadata indexing** and duplicate filtering.
-- **Hybrid Retrieval Engine**: Combines semantic vector search, version-isolated BM25 lexical search with in-memory caching, and Reciprocal Rank Fusion (RRF) for higher retrieval accuracy.
-- **Spreadsheet & Table Intelligence**: Extracts, indexes, and incrementally synchronizes structured data from CSV, XLSX, and DOCX tables. Spreadsheet edits automatically update semantic vectors and lexical indexes, enabling AI answers to reflect changes without full document re-indexing.
-- **Atomic Shadow Indexing**: Builds new vector generations in isolation, validates them across ChromaDB and BM25, performs compare-and-swap (CAS) activation, and automatically rolls back failed builds without interrupting retrieval.
+- **Contextual document embeddings**: Prepend document title, hierarchical headings, and page ranges before embedding, improving retrieval quality while preserving the original chunk text for generation.
+- **Multi-Format Support**: Upload and process PDF, DOCX, TXT, CSV, and XLSX files.
+- **Token-Aware Chunking**: Heading-aware section tracing and token bounds packing with tiktoken.
+- **Hybrid Retrieval**: Dense vector search + version-isolated BM25 lexical search combined with Reciprocal Rank Fusion (RRF, $k=60$).
+- **Spreadsheet-Aware Indexing**: Cell-level incremental sync updates affected semantic vectors and lexical indexes without full re-indexing.
+- **Atomic Shadow Indexing**: Versioned builds with compare-and-swap (CAS) activation and automated rollback.
+- **Index-State Bloom Filter**: Process-local Counting Bloom filter for non-authoritative fast negative rejection.
 
 ### Security
-- **Session-Bound CSRF Protection**: Custom double-submit cookie protection with session-bound SHA-256 token validation, automatic CSRF synchronization for legacy or missing-cookie sessions, timing-safe comparisons, and Origin/Referer verification.
-- **Defense-in-Depth Request Validation**: Authenticated state-changing requests are protected by session-bound double-submit CSRF tokens, anti-caching response headers (Cache-Control/Surrogate-Control), Origin/Referer validation, timing-safe comparisons, and per-user/per-IP rate limiting.
-- **Internal AI Service Authentication**: All browser requests are routed through the Node.js backend. The Flask AI service accepts only authenticated server-to-server requests protected with a shared `SERVICE_TOKEN`, preventing direct client access to AI endpoints.
-- **Sensitive Data Detection**: Automatic identification of personal information (emails, phone numbers, Aadhaar, PAN, credit cards, SSN).
-- **User Consent Workflow**: Privacy-first approach requiring explicit consent before processing sensitive documents.
-- **Content Moderation**: Profanity filtering and URL validation to maintain platform integrity.
-- **Jailbreak Attempt Filtering**: Blocks common prompt-injection/jailbreak phrases in user questions before invoking retrieval/LLM.
-- **Prompt Injection Mitigation**: Document content is sanitized before LLM processing and treated as untrusted input.
-- **Hardened Error Handling**: Production-safe error responses return generic messages to clients while logging full server-side tracebacks. Detailed exception text is exposed only when `FLASK_DEBUG=1`, reducing information leakage and protecting internal service details.
-- **httpOnly Cookie Authentication**: Secure user sessions with role-based access control (User, Admin, Moderator).
-- **Server-Side Session Management**: Server-side session management with session invalidation and "logout from all devices" support.
-- **Centralized Server-Side Validation**: Auth and admin APIs validate all inputs with Zod schemas before any business logic or database access.
-- **Strict Admin Authorization**: Admin endpoints are protected by middleware that requires an authenticated user with `isAdmin = true`; there are no hardcoded admin credentials or token backdoors.
-- **Authentication Rate Limiting**: Sensitive auth endpoints (login, signup, password resets) are protected by dedicated, route-specific rate limits (e.g., login limiting failed attempts to 10 per 15 minutes, registration limited to 5 per hour).
-- **User Enumeration Protection**: Authentication endpoints utilize unified, generic error responses to avoid leaking database user existence.
-- **Document Deduplication & Upload Protection**: Uploaded files are restricted to a maximum size of 15 MB and validated by MIME type before being fingerprinted using SHA-256 hashes to reuse existing indices and prevent redundant processing.
-- **Optimistic Locking & Recovery**: Processing jobs use optimistic versioning and watchdog recovery to prevent race conditions and automatically recover stalled indexing tasks.
+- **HTTP-only Cookie Authentication**: JWT session tokens are stored in HTTP-only cookies and validated against server-side session state, with role-based access control.
+- **CSRF Protection**: State-changing requests use CSRF protection with Origin/Referer validation.
+- **Server-Side Input Validation**: API inputs are validated before business logic or database access.
+- **Authentication & Rate Limiting**: Authentication and sensitive endpoints use dedicated rate limits and authorization controls.
+- **Internal AI Service Authentication**: Browser clients cannot directly access Flask; protected AI routes require a shared `SERVICE_TOKEN`.
+- **Sensitive-Data Detection & Consent**: Detects sensitive information such as Aadhaar, PAN, credit cards, emails, and phone numbers and requires consent before processing.
+- **Prompt Injection & Context Sanitization**: User questions are checked against injection/jailbreak heuristics, while retrieved document content is treated as untrusted input and sanitized before LLM processing.
+- **Document Hashing & Deduplication**: SHA-256 document fingerprints prevent unnecessary duplicate processing.
+
+> Detailed security architecture, implementation, threat considerations, and testing are documented in [`SECURITY.md`](SECURITY.md).
 
 ### Administration
 - **User Management**: Comprehensive admin dashboard for user oversight and role assignment.
@@ -74,8 +60,8 @@ graph TD
 
     %% Business Logic Layer
     subgraph Middleware_Layer ["Business Logic Layer (Express Server)"]
-        ExpressRouter["Express API Router<br/>(JWT Authentication)<br/>(Session Management)<br/>(CSRF Validation)<br/>(Rate Limiting)<br/>(Structured Logging)<br/>(Service Token Proxy)"]:::business
-        AuthGuard["Auth & Session Middleware<br/>(JWT httpOnly Cookie Validation)"]:::business
+        ExpressRouter["Express API Router<br/>(Session & Auth Validation)<br/>(CSRF Protection)<br/>(Rate Limiting)<br/>(Structured Logging)<br/>(Service Token Proxy)"]:::business
+        AuthGuard["Auth & Session Middleware<br/>(JWT httpOnly Cookie + UserSession Validation)"]:::business
         ZodValidator["Input Validation<br/>(Zod Schemas)"]:::business
         MongooseDB["Mongoose ODM<br/>(User, Document, Chat, DocChunk models)"]:::business
     end
@@ -134,54 +120,32 @@ graph TD
 ## Technology Stack
 
 ### Frontend
-- **React.js 18.x**: Modern component-based UI framework
-- **React Router DOM**: Client-side routing and navigation
-- **i18next**: Internationalization support
-- **GSAP & Lottie**: Smooth animations and interactive elements
-- **Focus Trap React**: Accessibility features
+- **React 19**: SPA component architecture with React Router 7, i18next, GSAP, Lottie, and Focus Trap React.
 
-### Backend (Node)
-- **Node.js & Express 5.x**: RESTful API server
-- **Mongoose 8.x**: MongoDB object modeling
-- **JWT & bcryptjs**: Authentication and password security
-- **Multer**: File upload handling
-- **Helmet**: Security-oriented HTTP response headers
-- **Compression**: gzip response compression for payloads > 1 KB
-- **Pino**: Structured request and error logging
-- **CORS**: Cross-origin resource sharing configuration
-- **express-rate-limit**: API rate limiting for public sharing and authentication endpoints
+### Backend (Node.js)
+- **Node.js & Express 5**: API server, Mongoose 8 ODM, Pino logging, Helmet security, compression, and express-rate-limit.
+- **Authentication**: JWT stored in an `httpOnly` cookie verified against server-side session state (`UserSession`).
 
-### AI Service
-- **Flask 3.x**: Python web framework for AI processing
-- **LLM Router**: Model-agnostic task-aware routing with provider-level and model-level fallback, normalized responses, error classification, and a shared latency budget.
-- **Gemini 2.5 Flash**: Primary provider for document-grounded QA and summarization.
-- **Groq GPT-OSS 120B**: Primary provider for general QA, quizzes, flashcards, and conversation.
-- **Cerebras Llama 3.3 70B**: Resilience fallback provider.
-- **models/gemini-embedding-2**: High-quality vector embeddings
-- **ChromaDB 0.5+**: Vector storage
-- **BM25 Lexical Index**: Exact-match retrieval
-- **Reciprocal Rank Fusion (RRF)**: Hybrid ranking engine combining vector and lexical retrieval
-- **PyMuPDF4LLM / PyMuPDF**: Structural Markdown extractors
-- **tiktoken**: Token packing estimation
+### AI & Retrieval (Python / Flask)
+- **Flask 3**: Microservice for document processing, RAG pipelines, and LLM routing.
+- **LLM Router**: Task-aware provider routing with provider and model fallback.
+- **Vector & Lexical Retrieval**: ChromaDB (`gemini-embedding-2`), in-memory BM25 lexical search, and Reciprocal Rank Fusion (RRF, $k=60$).
 
 ### Document Processing
-- **PyMuPDF4LLM**: Markdown layout converter
-- **PyMuPDF (fitz)**: Page-level structural extraction fallback
-- **PyPDF2**: Backup PDF text extraction
-- **python-docx**: Microsoft Word document processing
-- **openpyxl**: Spreadsheet processing and table extraction
-- **Structured Table Extraction**: CSV, XLSX, and DOCX table indexing
-- **Better Profanity**: Content filtering
+- **PyMuPDF4LLM & PyMuPDF (fitz)**: Layout-aware structural Markdown extraction.
+- **PyPDF2**: Backup plain-text PDF parser.
+- **python-docx & openpyxl**: Microsoft Word and Excel spreadsheet parsing.
+- **tiktoken**: BPE token packing and section chunking bounds.
 
-### Storage
-- **MongoDB Atlas**: Primary NoSQL database for user data, documents, and chat history
-- **ChromaDB**: Vector store for document embeddings and semantic retrieval
+### Primary Storage
+- **MongoDB Atlas**: User accounts, document metadata, file chunks, and server session state.
+- **ChromaDB**: Local persistent vector database for document embeddings.
 
 ---
 
-## ADVANCED PDF INDEXING PIPELINE
+## PDF Indexing Pipeline
 
-To handle complex manuals and academic textbooks, SmartDocQ uses a specialized, stage-based indexing pipeline:
+SmartDocQ processes PDF documents through a multi-stage indexing pipeline:
 
 ```mermaid
 flowchart TD
@@ -201,41 +165,9 @@ flowchart TD
 
 ## Index Lifecycle Management
 
-The Flask AI service includes automatic vector index lifecycle management to maintain retrieval quality as embedding models and preprocessing logic evolve.
+SmartDocQ uses versioned shadow indexes to safely evolve embeddings and indexing logic without interrupting retrieval.
 
-Each ChromaDB vector stores detailed structural metadata. Before retrieval, SmartDocQ verifies vector compatibility and automatically triggers background reindexing when stale or incompatible vectors are detected.
-
-**This prevents:** silent retrieval degradation when upgrading embedding models or modifying chunking and preprocessing strategies.
-
-### Shadow Index Lifecycle
-SmartDocQ uses versioned shadow indexing to ensure retrieval remains available during reindexing.
-
-Each reindex creates a completely isolated index generation containing:
-- ChromaDB vectors
-- BM25 lexical index
-- Chunk metadata
-
-The active index continues serving queries while the new generation is built.
-
-Once validation succeeds:
-- Compare-and-swap (CAS) activation atomically promotes the new version
-- Previous version is retained for rollback
-- Obsolete generations are cleaned asynchronously
-
-If validation fails:
-- Active retrieval is unaffected
-- Failed generation is discarded
-- Previous active generation continues serving requests
-
-### Supported Versioning Metadata
-- `embedding_model` — e.g. `models/gemini-embedding-2`
-- `pipeline_version` — indexing pipeline config changes
-- `chunking_version` — data schema version tracking
-- `indexed_at` — timestamp of indexing
-- `file_hash` — source file content hash to detect changes
-- Incremental spreadsheet edits synchronize affected table and paragraph chunks while preserving the active index
-- `section` / `subsection` — dynamic layout coordinates
-- `start_page` / `end_page` — page range boundaries
+Each generation tracks the embedding model, pipeline version, chunking version, source file hash, and indexing timestamp. New generations are built independently and activated using compare-and-swap (CAS). Failed builds leave the active generation unchanged, while stale indexing jobs are recovered in the background.
 
 ---
 
@@ -254,15 +186,23 @@ This approach improves both semantic understanding and exact-match retrieval for
 
 ### Benchmarking
 
-SmartDocQ includes separate benchmarks for PDF extraction and retrieval:
+SmartDocQ includes separate empirical benchmark suites for retrieval quality, index decision path performance, and PDF extraction:
 
-- **PDF Extractor Benchmark** — Compares 10 PDF extraction libraries across 10 diverse documents, measuring extraction time, memory usage, CPU usage, page coverage, and structural extraction quality. This benchmark supported the selection of PyMuPDF4LLM for SmartDocQ's structure-aware PDF indexing pipeline.
-- **Retrieval Benchmark** — Evaluates Hybrid Dense Retrieval + BM25 + RRF against an experimental RRF + BGE Cross-Encoder pipeline using the BEIR SciFact dataset. The benchmark measures retrieval quality and query latency.
+#### Retrieval Benchmark (BEIR SciFact Corpus, 300 Queries)
+- **Hybrid Dense + BM25 + RRF (Baseline)**: nDCG@5 = **0.8294**, MRR@5 = **0.8092**, Recall@5 = **0.9146**, Retrieval Latency = **149.09 ms**.
+- **RRF + BGE Reranker (`BAAI/bge-reranker-base`)**: nDCG@5 = **0.7337** (-11.53%), MRR@5 = **0.7107** (-12.18%), Recall@5 = **0.8331** (-8.91%), Retrieval Latency = **15,373.12 ms** (+15.24s cross-encoder latency).
+- **Candidate Pool Recall**: **0.9867** (relevant documents were already captured in top RRF candidates prior to reranking).
+- **Decision**: Cross-encoder reranking decreased retrieval metrics while adding substantial latency; baseline Hybrid RRF is enabled by default.
 
-Detailed methodology, configurations, results, and analysis are documented separately:
+#### Index-State Bloom Filter Benchmark (1,000 Absent IDs, 100 Indexed Documents)
+- **Observed Sample False-Positive Rate**: **0.00%** (0/1,000 false positives; exact 95% upper confidence bound `< 0.30%`).
+- **Rejection Latency**: **0.0052 ms** (Bloom ON) vs **0.9613 ms** (Bloom OFF) median lookup latency for absent documents.
+- **P95 Tail Latency**: Up to **10.42x speedup** on negative lookups.
 
-- [PDF Extractor Benchmark](docs/benchmark/PDF-Extractor-Benchmark.md)
-- [Retrieval Benchmark](backend/benchmark/README.md)
+Detailed benchmark methodology, configurations, and reports:
+- [Information Retrieval & Reranker Report](backend/benchmark/retrieval_benchmark.md)
+- [Index Bloom Filter Benchmark Report](backend/benchmark/bloom_benchmark.md)
+- [PDF Extractor Benchmark Overview](docs/benchmark/PDF-Extractor-Benchmark.md)
 
 ---
 
@@ -279,9 +219,9 @@ To set up SmartDocQ locally, you'll need:
 
 ## Local Setup Instructions
 
-### 1. Fork & Clone Repository
+### 1. Clone Repository
 ```bash
-git clone https://github.com/your-username/SmartDocQ.git
+git clone https://github.com/SmartDocQ/SmartDocQ.git
 cd SmartDocQ
 ```
 
