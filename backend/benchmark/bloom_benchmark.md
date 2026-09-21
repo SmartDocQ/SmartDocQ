@@ -43,13 +43,10 @@ Bloom PRESENT ──> Perform authoritative index-state check (never assume inde
 
 ## 3. Empirical Benchmark Results
 
-### Execution Comparison Table
-
 | Benchmark Scenario / Workload Composition | Median (ms) | P95 (ms) | P99 (ms) | Mean (ms) | Speedup / Impact |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **1. Real Existing Docs - Bloom OFF** | 0.0470 ms | 0.1158 ms | 0.1546 ms | 0.1674 ms | Baseline hit lookup |
 | **1. Real Existing Docs - Bloom ON** | 0.0347 ms | 0.0724 ms | 0.1461 ms | 0.0483 ms | Measured hit path |
-
 | **2. Real Missing Docs - Bloom OFF** | 0.9613 ms | 1.9583 ms | 2.9215 ms | 1.2123 ms | Authoritative fallback |
 | **2. Real Missing Docs - Bloom ON** | 0.0052 ms | 0.0080 ms | 0.0140 ms | 0.0059 ms | **184.86x reduction in median lookup latency** |
 | **Sweep: 90% Exist / 10% Miss - OFF** | 0.0327 ms | 0.7455 ms | 1.0015 ms | 0.1447 ms | Baseline 90/10 composition |
